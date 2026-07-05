@@ -1,53 +1,70 @@
 @import "tailwindcss";
 
+/*
+ * PFAP Design Tokens
+ * ------------------
+ * Palette rationale: deep ink-navy base (not pure black) with a brass/gold
+ * accent. Gold was chosen deliberately because it signifies currency and
+ * wealth — the actual subject of this app — rather than reaching for the
+ * generic dark-UI accent (acid-green / vermilion).
+ *
+ * Type rationale: Space Grotesk carries personality for the greeting/date
+ * treatment in the Header (used sparingly, never for body copy). Inter is
+ * the workhorse for everything functional — nav labels, body text, data —
+ * because it stays legible at the small sizes a dense finance UI demands.
+ *
+ * These are Tailwind v4 theme tokens: every value below is usable directly
+ * as a utility class, e.g. `bg-surface`, `text-gold`, `border-gold`.
+ */
+@theme {
+  --color-base: #0b0e14;
+  --color-surface: #12161f;
+  --color-surface-2: #1a2030;
+  --color-gold: #c9a15a;
+  --color-gold-soft: #e8d5a8;
+  --color-ink: #f4f1ea;
+  --color-muted: #8a8f9c;
+  --color-positive: #4fbf8b;
+  --color-negative: #e0716b;
+
+  --font-display: "Space Grotesk", sans-serif;
+  --font-body: "Inter", sans-serif;
+}
+
+:root {
+  color-scheme: dark;
+}
+
 *,
 *::before,
 *::after {
   box-sizing: border-box;
 }
 
-* {
-  margin: 0;
-  padding: 0;
-}
-
 html,
 body,
 #root {
-  width: 100%;
-  min-height: 100vh;
+  height: 100%;
 }
 
 body {
-  font-family:
-    Inter,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
-
-  background-color: #f8fafc;
-  color: #0f172a;
-
-  line-height: 1.5;
-
+  margin: 0;
+  background-color: var(--color-base);
+  color: var(--color-ink);
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-button,
-input,
-textarea,
-select {
-  font: inherit;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-img {
-  display: block;
-  max-width: 100%;
+/* Respect users who've asked for less motion — applies to the nav pill
+   and any future shell animation. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
