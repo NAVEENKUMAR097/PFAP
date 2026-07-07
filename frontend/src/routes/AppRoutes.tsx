@@ -2,10 +2,10 @@ import { Routes, Route } from 'react-router-dom';
 import MainLayout from '../layouts/MainLayout';
 import DashboardPage from '../pages/Dashboard';
 import ExpensesPage from '../pages/Expenses';
-// import IncomePage from '../pages/Income';
-// import InvestmentsPage from '../pages/Investments';
-// import LendingPage from '../pages/Lending';
-// import BorrowingPage from '../pages/Borrowing';
+import IncomePage from '../pages/income';
+import InvestmentsPage from '../pages/Investments';
+import LendingPage from '../pages/Lending';
+import BorrowingPage from '../pages/Borrowing';
 import BudgetPage from '../pages/Budget';
 import AnalyticsPage from '../pages/Analytics';
 // import ReportsPage from '../pages/Reports';
@@ -24,10 +24,10 @@ export default function AppRoutes() {
       <Route element={<MainLayout />}>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/expenses" element={<ExpensesPage />} />
-        {/* <Route path="/income" element={<IncomePage />} /> */}
-        {/* <Route path="/investments" element={<InvestmentsPage />} /> */}
-        {/* <Route path="/lending" element={<LendingPage />} /> */}
-        {/* <Route path="/borrowing" element={<BorrowingPage />} /> */}
+        <Route path="/income" element={<IncomePage />} />
+        <Route path="/investments" element={<InvestmentsPage />} />
+        <Route path="/lending" element={<LendingPage />} />
+        <Route path="/borrowing" element={<BorrowingPage />} />
         <Route path="/budget" element={<BudgetPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
         {/* <Route path="/reports" element={<ReportsPage />} /> */}

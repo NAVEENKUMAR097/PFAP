@@ -6,27 +6,24 @@ from sqlalchemy.orm import Session
 from .. import crud, models, schemas
 from ..database import get_db
 
-router = APIRouter(prefix="/expenses", tags=["expenses"])
+router = APIRouter(prefix="/investments", tags=["investments"])
 
 
 # ---------------------------------------------------------------------------
 # Mapper
 # ---------------------------------------------------------------------------
 
-def _to_expense_out(transaction) -> schemas.ExpenseOut:
-    detail = transaction.expense_detail
+def _to_investment_out(transaction) -> schemas.InvestmentOut:
+    detail = transaction.investment_detail
 
-    return schemas.ExpenseOut(
+    return schemas.InvestmentOut(
         id=transaction.id,
         date=transaction.date,
         amount=transaction.amount,
         notes=transaction.notes,
         account=transaction.account,
-        category=detail.category,
-        subcategory=detail.subcategory,
-        merchant=detail.merchant,
-        payment_method=detail.payment_method,
-        need_or_want=detail.need_or_want,
+        investment_type=detail.investment_type,
+        broker=detail.broker,
         tags=detail.tags,
     )
 
@@ -34,9 +31,9 @@ def _to_expense_out(transaction) -> schemas.ExpenseOut:
 # Validation Helpers
 # ---------------------------------------------------------------------------
 
-def _validate_expense_references(
+def _validate_investment_references(
     db: Session,
-    payload: schemas.ExpenseCreate,
+    payload: schemas.InvestmentCreate,
 ) -> None:
 
     if db.get(models.Account, payload.account_id) is None:
@@ -45,25 +42,10 @@ def _validate_expense_references(
             detail="account_id does not exist",
         )
 
-    if db.get(models.Category, payload.category_id) is None:
+    if db.get(models.InvestmentType, payload.investment_type_id) is None:
         raise HTTPException(
             status_code=400,
-            detail="category_id does not exist",
-        )
-
-    if db.get(models.PaymentMethod, payload.payment_method_id) is None:
-        raise HTTPException(
-            status_code=400,
-            detail="payment_method_id does not exist",
-        )
-
-    if (
-        payload.subcategory_id is not None
-        and db.get(models.Subcategory, payload.subcategory_id) is None
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail="subcategory_id does not exist",
+            detail="investment_type_id does not exist",
         )
 
 
@@ -71,37 +53,37 @@ def _validate_expense_references(
 # Create
 # ---------------------------------------------------------------------------
 
-@router.post("", response_model=schemas.ExpenseOut, status_code=201)
-def add_expense(
-    payload: schemas.ExpenseCreate,
+@router.post("", response_model=schemas.InvestmentOut, status_code=201)
+def add_investment(
+    payload: schemas.InvestmentCreate,
     db: Session = Depends(get_db),
 ):
-    _validate_expense_references(
+    _validate_investment_references(
     db,
     payload,
 )
 
-    transaction = crud.create_expense(db, payload)
+    transaction = crud.create_investment(db, payload)
 
-    return _to_expense_out(transaction)
+    return _to_investment_out(transaction)
 
 
 # ---------------------------------------------------------------------------
 # Read All
 # ---------------------------------------------------------------------------
 
-@router.get("", response_model=list[schemas.ExpenseOut])
-def get_expenses(
+@router.get("", response_model=list[schemas.InvestmentOut])
+def get_investments(
     month: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
-    transactions = crud.list_expenses(
+    transactions = crud.list_investments(
         db,
         month=month,
     )
 
     return [
-        _to_expense_out(transaction)
+        _to_investment_out(transaction)
         for transaction in transactions
     ]
 
@@ -110,81 +92,81 @@ def get_expenses(
 # Read One
 # ---------------------------------------------------------------------------
 
-@router.get("/{expense_id}", response_model=schemas.ExpenseOut)
-def get_expense(
-    expense_id: int,
+@router.get("/{investment_id}", response_model=schemas.InvestmentOut)
+def get_investment(
+    investment_id: int,
     db: Session = Depends(get_db),
 ):
-    transaction = crud.get_expense(
+    transaction = crud.get_investment(
         db,
-        expense_id,
+        investment_id,
     )
 
     if transaction is None:
         raise HTTPException(
             status_code=404,
-            detail="Expense not found",
+            detail="Investment not found",
         )
 
-    return _to_expense_out(transaction)
+    return _to_investment_out(transaction)
 
 
 # ---------------------------------------------------------------------------
 # Update
 # ---------------------------------------------------------------------------
 
-@router.put("/{expense_id}", response_model=schemas.ExpenseOut)
-def update_expense(
-    expense_id: int,
-    payload: schemas.ExpenseCreate,
+@router.put("/{investment_id}", response_model=schemas.InvestmentOut)
+def update_investment(
+    investment_id: int,
+    payload: schemas.InvestmentCreate,
     db: Session = Depends(get_db),
 ):
-    transaction = crud.get_expense(
+    transaction = crud.get_investment(
         db,
-        expense_id,
+        investment_id,
     )
 
     if transaction is None:
         raise HTTPException(
             status_code=404,
-            detail="Expense not found",
+            detail="Investment not found",
         )
 
-    _validate_expense_references(
+    _validate_investment_references(
     db,
     payload,
 )
 
-    updated = crud.update_expense(
+    updated = crud.update_investment(
         db,
         transaction,
         payload,
     )
 
-    return _to_expense_out(updated)
+    return _to_investment_out(updated)
 
 
 # ---------------------------------------------------------------------------
 # Delete
 # ---------------------------------------------------------------------------
 
-@router.delete("/{expense_id}", status_code=204)
-def delete_expense(
-    expense_id: int,
+@router.delete("/{investment_id}", status_code=204)
+def delete_investment(
+    investment_id: int,
     db: Session = Depends(get_db),
 ):
-    transaction = crud.get_expense(
+    transaction = crud.get_investment(
         db,
-        expense_id,
+        investment_id,
     )
 
     if transaction is None:
         raise HTTPException(
             status_code=404,
-            detail="Expense not found",
+            detail="Investment not found",
         )
 
-    crud.delete_expense(
+    crud.delete_investment(
         db,
         transaction,
     )

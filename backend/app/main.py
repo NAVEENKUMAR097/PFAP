@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import models, seed
 from .database import Base, engine, SessionLocal
-from .routers import dashboard, expenses, master_data
+from .routers import borrowing, dashboard, expenses, income, investments, lending, master_data
 
 
 @asynccontextmanager
@@ -36,6 +36,10 @@ app.add_middleware(
 )
 
 app.include_router(expenses.router)
+app.include_router(income.router)
+app.include_router(investments.router)
+app.include_router(lending.router)
+app.include_router(borrowing.router)
 app.include_router(master_data.router)
 app.include_router(dashboard.router)
 
