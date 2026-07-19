@@ -36,7 +36,7 @@ interface UseBorrowingResult {
   removeRepayment: (borrowingId: number, repaymentId: number) => Promise<void>;
 }
 
-const UNREACHABLE_MESSAGE = 'Could not reach the backend. Is it running on http://localhost:8000?';
+import { UNREACHABLE_MESSAGE } from "../../../config";
 
 export function useBorrowing(): UseBorrowingResult {
   const [borrowings, setBorrowings] = useState<BorrowingOut[]>([]);

@@ -87,6 +87,10 @@ def get_investments(
         for transaction in transactions
     ]
 
+# NOTE: Holdings are listed via the dedicated investment_holdings router
+# (GET /investment-holdings), not here. Do not add a holdings endpoint to
+# this router - that would duplicate it under a second path.
+
 
 # ---------------------------------------------------------------------------
 # Read One

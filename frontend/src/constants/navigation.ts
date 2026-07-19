@@ -11,6 +11,7 @@ import {
   LineChart,
   FileBarChart,
   Settings,
+  Repeat2,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -50,6 +51,7 @@ export const SECONDARY_NAV_ITEMS: NavItem[] = [
   { id: 'lending', label: 'Lending', path: '/lending', icon: HandCoins },
   { id: 'borrowing', label: 'Borrowing', path: '/borrowing', icon: Handshake },
   { id: 'investments', label: 'Investments', path: '/investments', icon: LineChart },
+  { id: 'recurring', label: 'Recurring', path: '/recurring', icon: Repeat2 },
   { id: 'reports', label: 'Reports', path: '/reports', icon: FileBarChart },
   { id: 'settings', label: 'Settings', path: '/settings', icon: Settings },
 ];

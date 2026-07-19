@@ -16,6 +16,7 @@ export default function IncomePage() {
     cancelEditing,
     submitIncome,
     removeIncome,
+    handleSaveAsTemplate,
   } = useIncome();
 
   return (
@@ -27,6 +28,7 @@ export default function IncomePage() {
         submitting={submitting}
         onSubmit={submitIncome}
         onCancelEdit={cancelEditing}
+        onSaveAsTemplate={handleSaveAsTemplate}
       />
 
       {error && <p className="mt-3 text-sm text-negative">{error}</p>}

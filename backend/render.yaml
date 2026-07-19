@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: pfap-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pfap-db
+          property: connectionString
+      - key: ENVIRONMENT
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALLOWED_ORIGINS
+        value: https://pfap.vercel.app
+      - key: LOG_LEVEL
+        value: INFO
+      - key: API_PORT
+        value: 8000
+
+databases:
+  - name: pfap-db
+    databaseName: pfap
+    user: pfap_user

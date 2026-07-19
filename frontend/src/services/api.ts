@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://localhost:8000";
+import { API_URL } from '../config';
 
 export class ApiError extends Error {
   status: number;
@@ -20,7 +20,7 @@ export async function apiRequest<T>(
   path: string,
   options?: RequestInit
 ): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(`${API_URL}${path}`, {
     headers: {
       "Content-Type": "application/json",
     },

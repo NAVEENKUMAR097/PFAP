@@ -25,7 +25,7 @@ interface UseInvestmentsResult {
   removeInvestment: (id: number) => Promise<void>;
 }
 
-const UNREACHABLE_MESSAGE = 'Could not reach the backend. Is it running on http://localhost:8000?';
+import { UNREACHABLE_MESSAGE } from "../../../config";
 
 export function useInvestments(): UseInvestmentsResult {
   const [investments, setInvestments] = useState<InvestmentOut[]>([]);

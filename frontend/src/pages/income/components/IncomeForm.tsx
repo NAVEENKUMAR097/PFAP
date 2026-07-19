@@ -8,6 +8,7 @@ interface IncomeFormProps {
   submitting: boolean;
   onSubmit: (payload: IncomeCreatePayload) => Promise<void>;
   onCancelEdit: () => void;
+  onSaveAsTemplate?: () => void;
 }
 
 function todayIso(): string {
@@ -21,6 +22,7 @@ export default function IncomeForm({
   submitting,
   onSubmit,
   onCancelEdit,
+  onSaveAsTemplate,
 }: IncomeFormProps) {
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(todayIso());
@@ -166,6 +168,16 @@ export default function IncomeForm({
         >
           {submitting ? 'Saving…' : isEditing ? 'Update Income' : 'Add Income'}
         </button>
+        {onSaveAsTemplate && !isEditing && (
+          <button
+            type="button"
+            onClick={onSaveAsTemplate}
+            disabled={submitting}
+            className="mt-1 rounded-xl border border-white/10 px-4 py-2.5 text-sm text-muted disabled:opacity-50"
+          >
+            Save as Template
+          </button>
+        )}
         {isEditing && (
           <button
             type="button"

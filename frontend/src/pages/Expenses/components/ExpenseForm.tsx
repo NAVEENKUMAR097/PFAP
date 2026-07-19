@@ -20,7 +20,9 @@ interface ExpenseFormProps {
     editingExpense: ExpenseOut | null;
 
     onCancelEdit: () => void;
-  
+
+ onSaveAsTemplate?: () => void;
+
     form: {
     amount: string;
     setAmount: (value: string) => void;
@@ -55,6 +57,7 @@ export default function ExpenseForm({
   form,
   editingExpense,
   onCancelEdit,
+  onSaveAsTemplate,
   onSubmit,
 }: ExpenseFormProps) {
   return (
@@ -130,8 +133,16 @@ export default function ExpenseForm({
         <select
           value={form.accountId}
           onChange={(e) => form.setAccountId(e.target.value)}
+          disabled={loading || masterData.accounts.length === 0}
           className="rounded-xl bg-surface-2 px-3 py-2 text-ink outline-none focus:ring-2 focus:ring-gold"
         >
+          <option value="" disabled>
+            {loading
+              ? "Loading accounts..."
+              : masterData.accounts.length === 0
+              ? "No accounts available"
+              : "Select an account"}
+          </option>
           {masterData.accounts.map((account) => (
             <option key={account.id} value={account.id}>
               {account.name}
@@ -183,6 +194,17 @@ export default function ExpenseForm({
                           ? "Update Expense"
                           : "Add Expense"}
               </button>
+
+              {onSaveAsTemplate && !editingExpense && (
+                  <button
+                      type="button"
+                      onClick={onSaveAsTemplate}
+                      disabled={loading || submitting}
+                      className="rounded-xl border border-white/10 px-4 py-3 text-sm text-muted disabled:opacity-50"
+                  >
+                      Save as Template
+                  </button>
+              )}
 
               {editingExpense && (
                   <button

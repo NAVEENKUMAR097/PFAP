@@ -11,6 +11,9 @@ each 1:1 linked to its own repayment transaction. Every real cash
 movement — lending out, borrowing in, or repaying either — still lands
 in `transactions`, so Dashboard/Analytics never needs a special case; it
 just sees more transactions.
+
+Budget is the one entity in this file that deliberately does NOT
+participate in that pattern — see the Budget class docstring below.
 """
 import enum
 from datetime import datetime
@@ -20,6 +23,7 @@ from sqlalchemy import (
     Integer,
     String,
     Float,
+    Numeric,
     DateTime,
     Date,
     ForeignKey,
@@ -141,6 +145,45 @@ class Broker(Base):
     name = Column(String(150), nullable=False, unique=True)
 
 
+class InvestmentHolding(Base):
+    """
+    Represents a current investment position/holding. Multiple investment
+    transactions (SIPs, lumpsum, etc.) accumulate into a single holding
+    identified by (investment_type, broker, account). This separates
+    transaction history from current portfolio state for accurate analytics.
+    """
+    __tablename__ = "investment_holdings"
+
+    id = Column(Integer, primary_key=True)
+    investment_type_id = Column(Integer, ForeignKey("investment_types.id"), nullable=False)
+    broker_id = Column(Integer, ForeignKey("brokers.id"), nullable=True)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
+
+    # Portfolio state
+    total_invested = Column(Numeric(12, 2), default=0, nullable=False)
+    transaction_count = Column(Integer, default=0, nullable=False)
+    first_investment_date = Column(Date, nullable=True)
+    last_investment_date = Column(Date, nullable=True)
+
+    # Optional: for NAV-based investments (mutual funds, stocks)
+    total_units = Column(Numeric(12, 4), nullable=True)
+    average_cost_per_unit = Column(Numeric(12, 4), nullable=True)
+    current_value = Column(Numeric(12, 2), nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    investment_type = relationship("InvestmentType")
+    broker = relationship("Broker")
+    account = relationship("Account")
+    transactions = relationship("InvestmentDetail", back_populates="holding")
+
+    __table_args__ = (
+        UniqueConstraint("investment_type_id", "broker_id", "account_id", name="uq_investment_holding"),
+    )
+
+
 class Person(Base):
     """
     Free-text-but-deduplicated, same pattern as Merchant/Broker. Shared
@@ -156,6 +199,39 @@ class Person(Base):
     is_active = Column(Boolean, default=True, nullable=False)
 
 
+class Budget(Base):
+    """
+    A monthly spending limit for one category. Deliberately NOT linked to
+    Transaction — a budget is a plan ("spend at most X on Food this
+    month"), not a cash movement, so it doesn't belong in the shared-core
+    transactions pattern the way Expense/Income/Investment/Lending/
+    Borrowing do. It only *reads* Expense data (to compute spend); it
+    never writes to it.
+
+    "Budgets reset monthly while preserving history" (approved business
+    rule) is satisfied by the schema itself: (category_id, month) is
+    unique, so each month gets its own row — nothing is ever overwritten,
+    and every past month's budget stays queryable.
+
+    spent/remaining/utilization_pct/status are computed at read-time
+    (see crud.compute_budget_status) from summing that category's
+    expenses for the month — never stored, same reasoning as Lending's
+    computed status.
+    """
+
+    __tablename__ = "budgets"
+
+    id = Column(Integer, primary_key=True)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=False)
+    month = Column(String(7), nullable=False)  # "YYYY-MM"
+    amount = Column(Numeric(12, 2), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    category = relationship("Category")
+
+    __table_args__ = (UniqueConstraint("category_id", "month", name="uq_budget_category_month"),)
+
+
 # ---------------------------------------------------------------------------
 # Transactional core
 # ---------------------------------------------------------------------------
@@ -167,12 +243,17 @@ class Transaction(Base):
     id = Column(Integer, primary_key=True)
     transaction_type = Column(SqlEnum(TransactionType), nullable=False, index=True)
     date = Column(Date, nullable=False, index=True)
-    amount = Column(Float, nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
     account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
     notes = Column(String(500), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    is_recurring = Column(Boolean, default=False, nullable=False)
+    recurring_transaction_id = Column(Integer, ForeignKey("recurring_transactions.id"), nullable=True)
+    execution_date = Column(Date, nullable=True)
+    execution_status = Column(String(20), nullable=True)
 
     account = relationship("Account", back_populates="transactions")
+    recurring_transaction = relationship("RecurringTransaction", back_populates="generated_transactions")
     expense_detail = relationship(
         "ExpenseDetail", back_populates="transaction", uselist=False, cascade="all, delete-orphan"
     )
@@ -261,11 +342,13 @@ class InvestmentDetail(Base):
     transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=False, unique=True)
     investment_type_id = Column(Integer, ForeignKey("investment_types.id"), nullable=False)
     broker_id = Column(Integer, ForeignKey("brokers.id"), nullable=True)
+    holding_id = Column(Integer, ForeignKey("investment_holdings.id"), nullable=True)
     tags = Column(String(255), nullable=True)
 
     transaction = relationship("Transaction", back_populates="investment_detail")
     investment_type = relationship("InvestmentType")
     broker = relationship("Broker")
+    holding = relationship("InvestmentHolding", back_populates="transactions")
 
 
 class LendingAgreement(Base):
@@ -358,3 +441,184 @@ class BorrowingRepayment(Base):
 
     agreement = relationship("BorrowingAgreement", back_populates="repayments")
     transaction = relationship("Transaction", back_populates="borrowing_repayment_detail")
+
+
+# ---------------------------------------------------------------------------
+# Recurring Expenses
+# ---------------------------------------------------------------------------
+
+class RecurringFrequency(str, enum.Enum):
+    daily = "daily"
+    weekly = "weekly"
+    monthly = "monthly"
+    yearly = "yearly"
+
+
+class RecurringTransactionType(str, enum.Enum):
+    expense = "expense"
+    income = "income"
+    investment = "investment"
+    lending = "lending"
+    borrowing = "borrowing"
+
+
+class RecurringStatus(str, enum.Enum):
+    active = "active"
+    paused = "paused"
+    completed = "completed"
+    cancelled = "cancelled"
+    failed = "failed"
+
+
+class RecurringExpense(Base):
+    __tablename__ = "recurring_expenses"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(150), nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=False)
+    subcategory_id = Column(Integer, ForeignKey("subcategories.id"), nullable=True)
+    payment_method_id = Column(Integer, ForeignKey("payment_methods.id"), nullable=False)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
+    merchant_name = Column(String(150), nullable=True)
+    need_or_want = Column(String(10), nullable=True)
+    notes = Column(String(500), nullable=True)
+    tags = Column(String(255), nullable=True)
+    frequency = Column(SqlEnum(RecurringFrequency), nullable=False)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=True)
+    next_due_date = Column(Date, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    category = relationship("Category")
+    subcategory = relationship("Subcategory")
+    payment_method = relationship("PaymentMethod")
+    account = relationship("Account")
+
+
+class ExpenseTemplate(Base):
+    """
+    Reusable expense template for recurring transactions.
+    Stores common expense details that can be referenced by multiple recurring rules.
+    Example: Netflix subscription template with category, merchant, payment method.
+    """
+    __tablename__ = "expense_templates"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(150), nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=False)
+    subcategory_id = Column(Integer, ForeignKey("subcategories.id"), nullable=True)
+    payment_method_id = Column(Integer, ForeignKey("payment_methods.id"), nullable=False)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
+    merchant_name = Column(String(150), nullable=True)
+    need_or_want = Column(String(10), nullable=True)
+    notes = Column(String(500), nullable=True)
+    tags = Column(String(255), nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    category = relationship("Category")
+    subcategory = relationship("Subcategory")
+    payment_method = relationship("PaymentMethod")
+    account = relationship("Account")
+
+
+class IncomeTemplate(Base):
+    """
+    Reusable income template for recurring transactions.
+    Stores common income details that can be referenced by multiple recurring rules.
+    Example: Salary template with income source and account.
+    """
+    __tablename__ = "income_templates"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(150), nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
+    income_source_id = Column(Integer, ForeignKey("income_sources.id"), nullable=False)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
+    notes = Column(String(500), nullable=True)
+    tags = Column(String(255), nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    income_source = relationship("IncomeSource")
+    account = relationship("Account")
+
+
+# NOTE: There is intentionally NO InvestmentTemplate model.
+# Unlike Expense/Income, a recurring investment (SIP) does not create a new
+# conceptual entity each time it runs - it adds another contribution to an
+# EXISTING InvestmentHolding. The holding's (investment_type_id, broker_id,
+# account_id) triplet already IS the identity a template would have stored,
+# so a separate template table would just duplicate that identity and risk
+# drifting out of sync with the real holding. Recurring investments therefore
+# reference investment_holding_id directly (see RecurringTransaction below).
+
+
+class RecurringTransaction(Base):
+    """
+    Unified recurring transaction engine that references existing business entities.
+    This is an automation engine, not a data-entry module. It stores references to
+    existing templates/entities and automates transaction creation based on those references.
+    
+    Supported transaction types:
+    - Expense: References an expense template (Netflix, EMI, Insurance premiums)
+    - Income: References an income template (Salary, Rent income)
+    - Investment: References an EXISTING investment holding (Monthly SIPs).
+      There is no investment template - execution adds a contribution to the
+      referenced holding rather than creating a new investment.
+    - Lending: References an EXISTING lending agreement (Recurring installment
+      repayments received). Execution adds a LendingRepayment against that
+      agreement rather than creating a new loan.
+    - Borrowing: References an EXISTING borrowing agreement (Recurring
+      installment repayments made). Execution adds a BorrowingRepayment
+      against that agreement rather than creating a new loan.
+    
+    Only one reference field is populated based on transaction_type.
+    Lifecycle: Active → Paused/Completed/Cancelled/Failed
+
+    account_id: for expense/income this is user-supplied. For investment,
+    lending, and borrowing it is NOT user-supplied - it is always derived
+    from and kept in sync with the referenced holding/agreement's account,
+    so there is a single source of truth for which account the money moves
+    through.
+    """
+    __tablename__ = "recurring_transactions"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(150), nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
+    transaction_type = Column(SqlEnum(RecurringTransactionType), nullable=False, index=True)
+    status = Column(SqlEnum(RecurringStatus), default=RecurringStatus.active, nullable=False, index=True)
+    
+    # Common fields for all transaction types
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
+    frequency = Column(SqlEnum(RecurringFrequency), nullable=False)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=True)
+    next_due_date = Column(Date, nullable=False, index=True)
+    notes = Column(String(500), nullable=True)
+    tags = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Type-specific reference fields (only one is populated based on transaction_type)
+    # References to existing business entities/templates
+    expense_template_id = Column(Integer, ForeignKey("expense_templates.id"), nullable=True)
+    income_template_id = Column(Integer, ForeignKey("income_templates.id"), nullable=True)
+    investment_holding_id = Column(Integer, ForeignKey("investment_holdings.id"), nullable=True)
+    lending_id = Column(Integer, ForeignKey("lending_agreements.id"), nullable=True)
+    borrowing_id = Column(Integer, ForeignKey("borrowing_agreements.id"), nullable=True)
+    
+    account = relationship("Account")
+    expense_template = relationship("ExpenseTemplate")
+    income_template = relationship("IncomeTemplate")
+    investment_holding = relationship("InvestmentHolding")
+    lending_agreement = relationship("LendingAgreement")
+    borrowing_agreement = relationship("BorrowingAgreement")
+    generated_transactions = relationship(
+        "Transaction",
+        back_populates="recurring_transaction",
+        foreign_keys="Transaction.recurring_transaction_id",
+    )

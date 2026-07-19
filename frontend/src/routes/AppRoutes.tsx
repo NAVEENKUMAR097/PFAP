@@ -11,6 +11,7 @@ import AnalyticsPage from '../pages/Analytics';
 // import ReportsPage from '../pages/Reports';
 import SettingsPage from '../pages/Settings';
 import MorePage from '../pages/More';
+import RecurringExpensesPage from '../pages/RecurringExpenses';
 
 /**
  * Every route is nested under a single MainLayout element, so Header and
@@ -32,6 +33,7 @@ export default function AppRoutes() {
         <Route path="/analytics" element={<AnalyticsPage />} />
         {/* <Route path="/reports" element={<ReportsPage />} /> */}
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/recurring" element={<RecurringExpensesPage />} />
         <Route path="/more" element={<MorePage />} />
       </Route>
     </Routes>

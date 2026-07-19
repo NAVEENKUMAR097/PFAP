@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import {
   createExpense,
@@ -10,7 +10,9 @@ import {
   getAccounts,
   getCategories,
   getPaymentMethods,
+  createExpenseTemplate,
 } from "../../../services/masterData";
+import { currentMonth, dateInMonth } from "../../../utils/month";
 
 import type {
   AccountOut,
@@ -34,7 +36,16 @@ export default function useExpenses() {
   const [editingExpense, setEditingExpense] =
   useState<ExpenseOut | null>(null);
 
+  // Month filter - defaults to the current month, same convention as
+  // Dashboard/Analytics/Investments.
+  const [month, setMonth] = useState(currentMonth());
+  // isFirstMonthRun guards against double-fetching expenses on mount: the
+  // initial load already fetches expenses for the initial month below, so
+  // the month-change effect should only act on *changes* after that.
+  const isFirstMonthRun = useRef(true);
+
   const [loading, setLoading] = useState(true);
+  const [listLoading, setListLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,7 +73,7 @@ export default function useExpenses() {
         getCategories(),
         getPaymentMethods(),
         getAccounts(),
-        listExpenses(),
+        listExpenses(month),
       ]);
 
       setCategories(categoriesRes);
@@ -91,7 +102,40 @@ export default function useExpenses() {
 
   useEffect(() => {
     loadEverything();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Re-fetch only the expense list (not categories/payment methods/accounts)
+  // whenever the selected month changes after the initial load.
+  useEffect(() => {
+    if (isFirstMonthRun.current) {
+      isFirstMonthRun.current = false;
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      setListLoading(true);
+      setError(null);
+      try {
+        const expensesRes = await listExpenses(month);
+        if (!cancelled) setExpenses(expensesRes);
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err instanceof ApiError ? err.message : "Unable to load expenses."
+          );
+        }
+      } finally {
+        if (!cancelled) setListLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [month]);
 
   function startEditing(expense: ExpenseOut) {
   setEditingExpense(expense);
@@ -139,6 +183,46 @@ async function handleDelete(expense: ExpenseOut) {
   }
 }
 
+async function handleSaveAsTemplate() {
+  const templateName = prompt("Enter a name for this expense template:");
+  if (!templateName || !templateName.trim()) return;
+
+  const parsedAmount = Number(amount);
+  if (!parsedAmount || parsedAmount <= 0) {
+    setError("Enter a valid amount before saving as template.");
+    return;
+  }
+
+  if (!categoryId || !paymentMethodId || !accountId) {
+    setError("Please fill all required fields before saving as template.");
+    return;
+  }
+
+  setSubmitting(true);
+  setError(null);
+
+  try {
+    await createExpenseTemplate({
+      name: templateName.trim(),
+      amount: parsedAmount,
+      category_id: Number(categoryId),
+      payment_method_id: Number(paymentMethodId),
+      account_id: Number(accountId),
+      merchant_name: merchantName.trim() || undefined,
+      notes: notes.trim() || undefined,
+    });
+    alert("Expense template saved successfully!");
+  } catch (err) {
+    setError(
+      err instanceof ApiError
+        ? err.message
+        : "Unable to save expense template.",
+    );
+  } finally {
+    setSubmitting(false);
+  }
+}
+
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
   e.preventDefault();
 
@@ -178,13 +262,17 @@ async function handleDelete(expense: ExpenseOut) {
         payload,
       );
 
-      setExpenses((prev) =>
-        prev.map((expense) =>
-          expense.id === updated.id
-            ? updated
-            : expense
-        )
-      );
+      setExpenses((prev) => {
+        // If the edited date moved outside the month currently being
+        // viewed, drop it from this list instead of leaving a
+        // now-mismatched row visible under the wrong month's filter.
+        if (!dateInMonth(updated.date, month)) {
+          return prev.filter((expense) => expense.id !== updated.id);
+        }
+        return prev.map((expense) =>
+          expense.id === updated.id ? updated : expense
+        );
+      });
 
       cancelEditing();
     }
@@ -195,10 +283,12 @@ async function handleDelete(expense: ExpenseOut) {
     else {
       const created = await createExpense(payload);
 
-      setExpenses((prev) => [
-        created,
-        ...prev,
-      ]);
+      // Only show it in the list if it actually belongs to the month
+      // currently being viewed (e.g. backdating an expense while looking
+      // at the current month shouldn't make it appear here).
+      if (dateInMonth(created.date, month)) {
+        setExpenses((prev) => [created, ...prev]);
+      }
 
       setAmount("");
       setMerchantName("");
@@ -217,8 +307,11 @@ async function handleDelete(expense: ExpenseOut) {
 
     return {
         loading,
+        listLoading,
         submitting,
         error,
+
+        month,
 
         masterData: {
             categories,
@@ -255,10 +348,11 @@ async function handleDelete(expense: ExpenseOut) {
             handleSubmit,
             reload: loadEverything,
 
-            
+            setMonth,
             startEditing,
             cancelEditing,
             handleDelete,
+            handleSaveAsTemplate,
         },
     };
 }

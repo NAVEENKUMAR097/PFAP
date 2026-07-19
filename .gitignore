@@ -8,7 +8,14 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
+
+# ==========================
+# Environment Variables
+# ==========================
 .env
+.env.local
+.env.development
+.env.production
 
 # ==========================
 # Node
@@ -37,6 +44,8 @@ Thumbs.db
 # Database
 # ==========================
 *.sqlite3
+*.db
+pfap.db
 
 # ==========================
 # Build
