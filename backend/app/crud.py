@@ -10,10 +10,16 @@ from calendar import monthrange
 from datetime import date as date_type, datetime
 from typing import Optional
 
+from decimal import Decimal
+
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from . import models, schemas
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def get_or_create_merchant(db: Session, name: str) -> models.Merchant:
@@ -231,7 +237,7 @@ def _sum_transactions(
         )
         .scalar()
     )
-    return round(total or 0, 2)
+    return round(total or Decimal("0.00"), 2)
 
 
 def _format_need_want_label(value: str | None) -> str:
@@ -245,14 +251,17 @@ def _build_loan_summary(
     agreements: list[models.LendingAgreement] | list[models.BorrowingAgreement],
     compute_status,
 ) -> schemas.AnalyticsLoanSummary:
-    principal = round(sum(agreement.transaction.amount for agreement in agreements), 2)
+    principal = round(
+      sum((agreement.transaction.amount for agreement in agreements), Decimal("0.00")), 2
+  )
     repaid = round(
-        sum(
-            sum(repayment.transaction.amount for repayment in agreement.repayments)
-            for agreement in agreements
-        ),
-        2,
-    )
+      sum(
+          (sum((r.transaction.amount for r in agreement.repayments), Decimal("0.00"))
+           for agreement in agreements),
+          Decimal("0.00"),
+      ),
+      2,
+  )
     outstanding = round(principal - repaid, 2)
     active_count = 0
     overdue_count = 0
@@ -401,7 +410,7 @@ def get_analytics_summary(db: Session, month: str) -> schemas.AnalyticsSummary:
     monthly_expense = _sum_transactions(db, models.TransactionType.expense, month)
     monthly_investment = _sum_transactions(db, models.TransactionType.investment, month)
     savings = round(monthly_income - monthly_expense - monthly_investment, 2)
-    savings_rate = round((savings / monthly_income) * 100, 1) if monthly_income > 0 else 0.0
+    savings_rate = float(round((savings / monthly_income) * 100, 1)) if monthly_income > 0 else 0.0
 
     lending_summary = _build_loan_summary(list_lendings(db), compute_lending_status)
     borrowing_summary = _build_loan_summary(list_borrowings(db), compute_borrowing_status)
@@ -410,7 +419,7 @@ def get_analytics_summary(db: Session, month: str) -> schemas.AnalyticsSummary:
     total_budget = round(sum(b.amount for b in budgets), 2)
     total_budget_spent = round(sum(get_category_spend(db, b.category_id, month) for b in budgets), 2)
     budget_utilization = (
-        round((total_budget_spent / total_budget) * 100, 1) if total_budget > 0 else 0.0
+      float(round((total_budget_spent / total_budget) * 100, 1)) if total_budget > 0 else 0.0
     )
 
     budget_signals = [
@@ -430,6 +439,7 @@ def get_analytics_summary(db: Session, month: str) -> schemas.AnalyticsSummary:
     # This is not full net worth: PFAP does not yet track opening balances
     # or asset market values. It is the net position visible from recorded
     # V1 transactions and loan balances.
+    
     tracked_position = round(
         monthly_income
         - monthly_expense
@@ -472,13 +482,13 @@ def get_analytics_summary(db: Session, month: str) -> schemas.AnalyticsSummary:
         .order_by(func.sum(models.Transaction.amount).desc())
         .all()
     )
-    category_total = sum(float(row[2] or 0) for row in category_rows)
+    category_total = sum((row[2] or Decimal("0") for row in category_rows), Decimal("0"))
     category_spend = [
         schemas.AnalyticsCategorySpend(
             category_id=row[0],
             category_name=row[1],
-            amount=round(float(row[2] or 0), 2),
-            percentage=round((float(row[2] or 0) / category_total) * 100, 1)
+            amount=round((row[2] or 0), 2),
+            percentage=round(((row[2] or 0) / category_total) * 100, 1)
             if category_total > 0
             else 0.0,
         )
@@ -506,9 +516,9 @@ def get_analytics_summary(db: Session, month: str) -> schemas.AnalyticsSummary:
     top_merchants = [
         schemas.AnalyticsBreakdownItem(
             label=row[1],
-            amount=round(float(row[2] or 0), 2),
+            amount=round((row[2] or 0), 2),
             count=int(row[3] or 0),
-            percentage=round((float(row[2] or 0) / monthly_expense) * 100, 1)
+            percentage=round(((row[2] or 0) / monthly_expense) * 100, 1)
             if monthly_expense > 0
             else 0.0,
         )
@@ -533,9 +543,9 @@ def get_analytics_summary(db: Session, month: str) -> schemas.AnalyticsSummary:
     need_want = [
         schemas.AnalyticsBreakdownItem(
             label=_format_need_want_label(row[0]),
-            amount=round(float(row[1] or 0), 2),
+            amount=round((row[1] or 0), 2),
             count=int(row[2] or 0),
-            percentage=round((float(row[1] or 0) / category_total) * 100, 1)
+            percentage=round(((row[1] or 0) / category_total) * 100, 1)
             if category_total > 0
             else 0.0,
         )
@@ -562,9 +572,9 @@ def get_analytics_summary(db: Session, month: str) -> schemas.AnalyticsSummary:
     payment_methods = [
         schemas.AnalyticsBreakdownItem(
             label=row[1],
-            amount=round(float(row[2] or 0), 2),
+            amount=round((row[2] or 0), 2),
             count=int(row[3] or 0),
-            percentage=round((float(row[2] or 0) / category_total) * 100, 1)
+            percentage=round(((row[2] or 0) / category_total) * 100, 1)
             if category_total > 0
             else 0.0,
         )
@@ -591,9 +601,9 @@ def get_analytics_summary(db: Session, month: str) -> schemas.AnalyticsSummary:
     income_sources = [
         schemas.AnalyticsBreakdownItem(
             label=row[1],
-            amount=round(float(row[2] or 0), 2),
+            amount=round((row[2] or 0), 2),
             count=int(row[3] or 0),
-            percentage=round((float(row[2] or 0) / monthly_income) * 100, 1)
+            percentage=round(((row[2] or 0) / monthly_income) * 100, 1)
             if monthly_income > 0
             else 0.0,
         )
@@ -620,9 +630,9 @@ def get_analytics_summary(db: Session, month: str) -> schemas.AnalyticsSummary:
     investment_allocation = [
         schemas.AnalyticsBreakdownItem(
             label=row[1],
-            amount=round(float(row[2] or 0), 2),
+            amount=round((row[2] or 0), 2),
             count=int(row[3] or 0),
-            percentage=round((float(row[2] or 0) / monthly_investment) * 100, 1)
+            percentage=round(((row[2] or 0) / monthly_investment) * 100, 1)
             if monthly_investment > 0
             else 0.0,
         )
@@ -645,13 +655,13 @@ def get_analytics_summary(db: Session, month: str) -> schemas.AnalyticsSummary:
         .order_by(models.InvestmentHolding.total_invested.desc())
         .all()
     )
-    total_portfolio_value = sum(float(row.total_invested or 0) for row in holdings_rows)
+    total_portfolio_value = sum((row.total_invested or 0) for row in holdings_rows)
     investment_holdings = [
         schemas.AnalyticsBreakdownItem(
             label=f"{row.investment_type_name}" + (f" ({row.broker_name})" if row.broker_name else ""),
-            amount=round(float(row.total_invested or 0), 2),
+            amount=round((row.total_invested or 0), 2),
             count=int(row.transaction_count or 0),
-            percentage=round((float(row.total_invested or 0) / total_portfolio_value) * 100, 1)
+            percentage=round(((row.total_invested or 0) / total_portfolio_value) * 100, 1)
             if total_portfolio_value > 0
             else 0.0,
         )
@@ -1456,7 +1466,7 @@ def get_category_spend(db: Session, category_id: int, month: str) -> float:
         )
         .scalar()
     )
-    return round(total or 0, 2)
+    return round(total or Decimal("0.00"), 2)
 
 
 def compute_budget_status(amount: float, spent: float) -> dict:

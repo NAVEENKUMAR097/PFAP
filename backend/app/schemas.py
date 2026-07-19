@@ -11,6 +11,7 @@ from datetime import date as date_type, datetime
 from typing import Optional, Literal
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
+from decimal import Decimal
 
 class MasterDataCreatePayload(BaseModel):
     """Used by master_data.py's create/update endpoints — both just send {"name": "..."}."""
@@ -109,7 +110,7 @@ class ExpenseCreate(BaseModel):
     """
 
     date: date_type
-    amount: float = Field(gt=0, description="Must be a positive number")
+    amount: Decimal = Field(gt=0, description="Must be a positive number")
     account_id: int
     category_id: int
     payment_method_id: int
@@ -125,7 +126,7 @@ class ExpenseOut(BaseModel):
 
     id: int
     date: date_type
-    amount: float
+    amount: Decimal
     notes: Optional[str]
     account: AccountOut
     category: CategoryOut
@@ -147,7 +148,7 @@ class IncomeCreate(BaseModel):
     """
 
     date: date_type
-    amount: float = Field(gt=0, description="Must be a positive number")
+    amount: Decimal = Field(gt=0, description="Must be a positive number")
     account_id: int
     income_source_id: int
     notes: Optional[str] = Field(default=None, max_length=500)
@@ -159,7 +160,7 @@ class IncomeOut(BaseModel):
 
     id: int
     date: date_type
-    amount: float
+    amount: Decimal
     notes: Optional[str]
     account: AccountOut
     income_source: IncomeSourceOut
@@ -177,7 +178,7 @@ class InvestmentCreate(BaseModel):
     """
 
     date: date_type
-    amount: float = Field(gt=0, description="Must be a positive number")
+    amount: Decimal = Field(gt=0, description="Must be a positive number")
     account_id: int
     investment_type_id: int
     broker_name: Optional[str] = Field(default=None, max_length=150)
@@ -190,7 +191,7 @@ class InvestmentOut(BaseModel):
 
     id: int
     date: date_type
-    amount: float
+    amount: Decimal
     notes: Optional[str]
     account: AccountOut
     investment_type: InvestmentTypeOut
@@ -205,13 +206,13 @@ class InvestmentHoldingOut(BaseModel):
     investment_type: InvestmentTypeOut
     broker: Optional[BrokerOut]
     account: AccountOut
-    total_invested: float
+    total_invested: Decimal
     transaction_count: int
     first_investment_date: Optional[date_type]
     last_investment_date: Optional[date_type]
-    total_units: Optional[float]
-    average_cost_per_unit: Optional[float]
-    current_value: Optional[float]
+    total_units: Optional[Decimal]
+    average_cost_per_unit: Optional[Decimal]
+    current_value: Optional[Decimal]
     # NOTE: these are DateTime columns on the model (created_at/updated_at
     # carry a real timestamp, not just a date) - typing them as date_type
     # here made every GET /investment-holdings response with a real
@@ -226,7 +227,7 @@ class InvestmentHoldingOut(BaseModel):
 
 class ExpenseTemplateCreate(BaseModel):
     name: str = Field(..., max_length=150)
-    amount: float = Field(gt=0)
+    amount: Decimal = Field(gt=0)
     category_id: int
     subcategory_id: Optional[int] = None
     payment_method_id: int
@@ -240,7 +241,7 @@ class ExpenseTemplateOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     name: str
-    amount: float
+    amount: Decimal
     category: CategoryOut
     subcategory: Optional[SubcategoryOut]
     payment_method: PaymentMethodOut
@@ -254,7 +255,7 @@ class ExpenseTemplateOut(BaseModel):
 
 class IncomeTemplateCreate(BaseModel):
     name: str = Field(..., max_length=150)
-    amount: float = Field(gt=0)
+    amount: Decimal = Field(gt=0)
     income_source_id: int
     account_id: int
     notes: Optional[str] = Field(default=None, max_length=500)
@@ -264,7 +265,7 @@ class IncomeTemplateOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     name: str
-    amount: float
+    amount: Decimal
     income_source: IncomeSourceOut
     account: AccountOut
     notes: Optional[str]
@@ -289,7 +290,7 @@ class LendingCreate(BaseModel):
     """
 
     date: date_type
-    amount: float = Field(gt=0, description="Principal amount lent")
+    amount: Decimal = Field(gt=0, description="Principal amount lent")
     account_id: int
     person_name: str = Field(max_length=150)
     due_date: Optional[date_type] = None
@@ -298,7 +299,7 @@ class LendingCreate(BaseModel):
 
 class LendingRepaymentCreate(BaseModel):
     date: date_type
-    amount: float = Field(gt=0, description="Must be a positive number")
+    amount: Decimal = Field(gt=0, description="Must be a positive number")
     account_id: int
     notes: Optional[str] = Field(default=None, max_length=500)
 
@@ -313,7 +314,7 @@ class LendingRepaymentOut(BaseModel):
 
     id: int
     date: date_type
-    amount: float
+    amount: Decimal
     notes: Optional[str]
     account: AccountOut
 
@@ -327,13 +328,13 @@ class LendingOut(BaseModel):
 
     id: int
     date: date_type
-    amount: float
+    amount: Decimal
     account: AccountOut
     person: PersonOut
     due_date: Optional[date_type]
     notes: Optional[str]
-    total_repaid: float
-    remaining: float
+    total_repaid: Decimal
+    remaining: Decimal
     status: Literal["active", "partially_repaid", "settled", "overdue"]
     repayments: list[LendingRepaymentOut]
 
@@ -348,7 +349,7 @@ class BorrowingCreate(BaseModel):
     """
 
     date: date_type
-    amount: float = Field(gt=0, description="Principal amount borrowed")
+    amount: Decimal = Field(gt=0, description="Principal amount borrowed")
     account_id: int
     person_name: str = Field(max_length=150)
     due_date: Optional[date_type] = None
@@ -357,7 +358,7 @@ class BorrowingCreate(BaseModel):
 
 class BorrowingRepaymentCreate(BaseModel):
     date: date_type
-    amount: float = Field(gt=0, description="Must be a positive number")
+    amount: Decimal = Field(gt=0, description="Must be a positive number")
     account_id: int
     notes: Optional[str] = Field(default=None, max_length=500)
 
@@ -365,7 +366,7 @@ class BorrowingRepaymentCreate(BaseModel):
 class BorrowingRepaymentOut(BaseModel):
     id: int
     date: date_type
-    amount: float
+    amount: Decimal
     notes: Optional[str]
     account: AccountOut
 
@@ -375,13 +376,13 @@ class BorrowingOut(BaseModel):
 
     id: int
     date: date_type
-    amount: float
+    amount: Decimal
     account: AccountOut
     person: PersonOut
     due_date: Optional[date_type]
     notes: Optional[str]
-    total_repaid: float
-    remaining: float
+    total_repaid: Decimal
+    remaining: Decimal
     status: Literal["active", "partially_repaid", "settled", "overdue"]
     repayments: list[BorrowingRepaymentOut]
 
@@ -399,7 +400,7 @@ class BudgetCreate(BaseModel):
 
     category_id: int
     month: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$", description='"YYYY-MM"')
-    amount: float = Field(gt=0, description="Must be a positive number")
+    amount: Decimal = Field(gt=0, description="Must be a positive number")
 
 
 class BudgetOut(BaseModel):
@@ -412,9 +413,9 @@ class BudgetOut(BaseModel):
     id: int
     category: CategoryOut
     month: str
-    amount: float
-    spent: float
-    remaining: float
+    amount: Decimal
+    spent: Decimal
+    remaining: Decimal
     utilization_pct: float
     status: Literal["under", "near", "exceeded"]
 
@@ -424,10 +425,10 @@ class BudgetOut(BaseModel):
 
 class DashboardSummary(BaseModel):
     month: str  # "YYYY-MM"
-    total_expense: float
+    total_expense: Decimal
     transaction_count: int
-    average_daily_expense: float
-    largest_expense: float
+    average_daily_expense: Decimal
+    largest_expense: Decimal
 
 
 # ---- Analytics ----------------------------------------------------------
@@ -442,22 +443,22 @@ class AnalyticsKpi(BaseModel):
 
 class AnalyticsMonthlyPoint(BaseModel):
     month: str
-    income: float
-    expenses: float
-    investments: float
-    cash_flow: float
+    income: Decimal
+    expenses: Decimal
+    investments: Decimal
+    cash_flow: Decimal
 
 
 class AnalyticsCategorySpend(BaseModel):
     category_id: int
     category_name: str
-    amount: float
+    amount: Decimal
     percentage: float
 
 
 class AnalyticsBreakdownItem(BaseModel):
     label: str
-    amount: float
+    amount: Decimal
     count: int
     percentage: float
 
@@ -465,17 +466,17 @@ class AnalyticsBreakdownItem(BaseModel):
 class AnalyticsBudgetSignal(BaseModel):
     category_id: int
     category_name: str
-    budget_amount: float
-    spent: float
-    remaining: float
+    budget_amount: Decimal
+    spent: Decimal
+    remaining: Decimal
     utilization_pct: float
     status: Literal["under", "near", "exceeded"]
 
 
 class AnalyticsLoanSummary(BaseModel):
-    principal: float
-    repaid: float
-    outstanding: float
+    principal: Decimal
+    repaid: Decimal
+    outstanding: Decimal
     active_count: int
     overdue_count: int
     settled_count: int
@@ -484,7 +485,7 @@ class AnalyticsLoanSummary(BaseModel):
 
 class AnalyticsCashFlowItem(BaseModel):
     label: str
-    amount: float
+    amount: Decimal
     direction: Literal["inflow", "outflow", "neutral"]
 
 
@@ -532,7 +533,7 @@ class AnalyticsSummary(BaseModel):
 
 class RecurringExpenseCreate(BaseModel):
     name: str
-    amount: float
+    amount: Decimal
     frequency: Literal["daily", "weekly", "monthly", "yearly"]
     start_date: date_type
     end_date: Optional[date_type] = None
@@ -552,7 +553,7 @@ class RecurringExpenseOut(BaseModel):
 
     id: int
     name: str
-    amount: float
+    amount: Decimal
     frequency: str
     start_date: date_type
     end_date: Optional[date_type]
@@ -583,7 +584,7 @@ class RecurringTransactionCreate(BaseModel):
     account an investment's money moves through.
     """
     name: str = Field(..., max_length=150)
-    amount: float = Field(gt=0, description="Must be a positive number")
+    amount: Decimal = Field(gt=0, description="Must be a positive number")
     transaction_type: Literal["expense", "income", "investment", "lending", "borrowing"]
     frequency: Literal["daily", "weekly", "monthly", "yearly"]
     start_date: date_type
@@ -609,7 +610,7 @@ class RecurringTransactionUpdate(BaseModel):
     investment_holding_id instead, and account_id is kept in sync automatically.
     """
     name: Optional[str] = Field(default=None, max_length=150)
-    amount: Optional[float] = Field(default=None, gt=0)
+    amount: Optional[Decimal] = Field(default=None, gt=0)
     transaction_type: Optional[Literal["expense", "income", "investment", "lending", "borrowing"]] = None
     status: Optional[Literal["active", "paused", "completed", "cancelled", "failed"]] = None
     frequency: Optional[Literal["daily", "weekly", "monthly", "yearly"]] = None
@@ -638,7 +639,7 @@ class RecurringTransactionOut(BaseModel):
 
     id: int
     name: str
-    amount: float
+    amount: Decimal
     transaction_type: str
     status: str
     frequency: str
@@ -677,5 +678,5 @@ class RecurringTransactionLogOut(BaseModel):
     transaction_type: str
     transaction_id: int
     date: date_type
-    amount: float
+    amount: Decimal
     message: str
