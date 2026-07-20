@@ -16,7 +16,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from . import models, schemas
-
+from sqlalchemy.exc import IntegrityError
+from fastapi import HTTPException
 import logging
 
 logger = logging.getLogger(__name__)
@@ -73,6 +74,97 @@ def get_or_create_person(db: Session, name: str) -> models.Person:
     db.add(person)
     db.flush()
     return person
+
+# ---------------------------------------------------------------------------
+# Generic Master Data CRUD (Category, PaymentMethod, Account, IncomeSource,
+# InvestmentType, Person — all share the same name+is_active shape, so one
+# generic implementation covers every master_data.py route instead of
+# duplicating the same six functions six times).
+# ---------------------------------------------------------------------------
+
+_MASTER_DATA_LABELS = {
+    models.Category: "Category",
+    models.PaymentMethod: "Payment method",
+    models.Account: "Account",
+    models.IncomeSource: "Income source",
+    models.InvestmentType: "Investment type",
+    models.Person: "Person",
+}
+
+
+def list_master_data(db: Session, model, active_only: bool = True) -> list:
+    """Not currently called by master_data.py (its GET routes query inline),
+    kept for consistency in case a route is refactored to use it later."""
+    query = db.query(model)
+    if active_only and hasattr(model, "is_active"):
+        query = query.filter(model.is_active.is_(True))
+    return query.order_by(model.name).all()
+
+
+def get_master_data_item(db: Session, model, item_id: int):
+    """Returns None if not found — routers turn that into a 404 themselves."""
+    return db.query(model).filter(model.id == item_id).first()
+
+
+def create_master_data_item(db: Session, model, name: str):
+    name = name.strip()
+    label = _MASTER_DATA_LABELS.get(model, model.__name__)
+
+    existing = (
+        db.query(model)
+        .filter(func.lower(model.name) == name.lower())
+        .first()
+    )
+    if existing:
+        raise HTTPException(status_code=409, detail=f"{label} '{name}' already exists.")
+
+    item = model(name=name)
+    db.add(item)
+    try:
+        db.commit()
+    except IntegrityError:
+        # Race condition: two requests passed the check above at the same
+        # time. The unique constraint on `name` catches it here instead.
+        db.rollback()
+        raise HTTPException(status_code=409, detail=f"{label} '{name}' already exists.")
+    db.refresh(item)
+    return item
+
+
+def update_master_data_item(db: Session, item, **fields):
+    """
+    Generic partial update. Used two ways by master_data.py:
+      - update_master_data_item(db, item, name="New Name")   -> rename
+      - update_master_data_item(db, item, is_active=False)   -> soft delete
+    """
+    model = type(item)
+    label = _MASTER_DATA_LABELS.get(model, model.__name__)
+
+    if fields.get("name") is not None:
+        new_name = fields["name"].strip()
+        existing = (
+            db.query(model)
+            .filter(func.lower(model.name) == new_name.lower(), model.id != item.id)
+            .first()
+        )
+        if existing:
+            raise HTTPException(status_code=409, detail=f"{label} '{new_name}' already exists.")
+        fields["name"] = new_name
+
+    for key, value in fields.items():
+        setattr(item, key, value)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=f"{label} name already exists.")
+    db.refresh(item)
+    return item
+
+
+
+
 
 
 def create_expense(db: Session, payload: schemas.ExpenseCreate) -> models.Transaction:
