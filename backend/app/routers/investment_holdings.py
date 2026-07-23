@@ -38,3 +38,11 @@ def get_investment_holding(
     if not holding:
         raise HTTPException(status_code=404, detail="Investment holding not found")
     return _to_holding_out(holding)
+
+
+@router.delete("/investment-holdings/{holding_id}", status_code=204)
+def delete_holding(holding_id: int, db: Session = Depends(get_db)):
+    deleted = crud.delete_investment_holding(db, holding_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Investment holding not found")
+    return None

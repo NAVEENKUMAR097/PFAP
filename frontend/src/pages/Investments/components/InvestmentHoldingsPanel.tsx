@@ -6,6 +6,16 @@ import {
 } from '../../../services/investments';
 import type { InvestmentHoldingOut, InvestmentLogEntryOut } from '../../../services/types';
 
+import {
+  
+  deleteInvestment,
+} from '../../../services/investments';
+
+import {
+  
+  deleteInvestmentHolding,
+} from '../../../services/investments';
+
 function formatMoney(n: number) {
   return `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
@@ -89,11 +99,12 @@ function ContributionForm({
 function HoldingCard({
   holding,
   onContributionAdded,
+  onHoldingDeleted,
 }: {
   holding: InvestmentHoldingOut;
   onContributionAdded: () => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
+  onHoldingDeleted: () => void;
+}) {  const [expanded, setExpanded] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [log, setLog] = useState<InvestmentLogEntryOut[] | null>(null);
   const [loadingLog, setLoadingLog] = useState(false);
@@ -131,6 +142,16 @@ function HoldingCard({
         <button onClick={() => setShowForm((v) => !v)} className="text-gold hover:underline">
           {showForm ? 'Cancel' : 'Add contribution'}
         </button>
+        <button
+          onClick={async () => {
+            if (!confirm(`Delete "${holding.investment_type.name}" and all ${holding.transaction_count} contribution(s)? This cannot be undone.`)) return;
+            await deleteInvestmentHolding(holding.id);
+            onHoldingDeleted();
+          }}
+          className="ml-auto text-negative hover:underline"
+        >
+          Delete holding
+        </button>
       </div>
 
       {showForm && (
@@ -152,10 +173,21 @@ function HoldingCard({
             log.map((entry) => (
               <div
                 key={entry.id}
-                className="flex justify-between border-b border-white/5 py-1.5 last:border-0 text-xs"
+                className="flex items-center justify-between border-b border-white/5 py-1.5 last:border-0 text-xs"
               >
                 <span className="text-muted">{entry.date}</span>
                 <span className="text-ink">{formatMoney(entry.amount)}</span>
+                <button
+                  onClick={async () => {
+                    if (!confirm('Delete this contribution?')) return;
+                    await deleteInvestment(entry.id);
+                    setRefreshKey((k) => k + 1);
+                    onContributionAdded();
+                  }}
+                  className="text-negative hover:underline"
+                >
+                  Delete
+                </button>
               </div>
             ))}
         </div>
@@ -193,7 +225,7 @@ export default function InvestmentHoldingsPanel() {
       {error && <p className="text-sm text-negative">{error}</p>}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {holdings.map((h) => (
-          <HoldingCard key={h.id} holding={h} onContributionAdded={load} />
+          <HoldingCard key={h.id} holding={h} onContributionAdded={load} onHoldingDeleted={load} />
         ))}
       </div>
       {!loading && holdings.length === 0 && (

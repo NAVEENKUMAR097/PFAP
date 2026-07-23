@@ -28,6 +28,8 @@ import type {
   NetWorthBreakdown,
 } from '../../services/types';
 import { formatCurrency } from '../../utils/currency';
+import { setAccountBalance } from '../../services/analytics';
+
 
 const CATEGORY_COLORS = ['#c9a15a', '#4fbf8b', '#e0716b', '#8a8f9c', '#e8d5a8', '#6f7db8'];
 
@@ -237,6 +239,83 @@ function InsightTile({ insight }: { insight: AnalyticsInsight }) {
   );
 }
 
+function AccountBalanceRow({
+  account,
+  onSaved,
+}: {
+  account: { id: number; name: string; balance: number };
+  onSaved: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(String(account.balance));
+  const [saving, setSaving] = useState(false);
+  const [rowError, setRowError] = useState<string | null>(null);
+
+  const save = async () => {
+    const parsed = Number(value);
+    if (Number.isNaN(parsed)) {
+      setRowError('Enter a valid number');
+      return;
+    }
+    setSaving(true);
+    setRowError(null);
+    try {
+      await setAccountBalance(account.id, parsed);
+      setEditing(false);
+      onSaved();
+    } catch {
+      setRowError('Could not save.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-2xl bg-surface-2 p-4">
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-ink">{account.name}</span>
+        {editing ? (
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              className="w-28 rounded-lg border border-white/10 bg-transparent px-2 py-1 text-sm text-ink"
+              autoFocus
+            />
+            <button
+              onClick={save}
+              disabled={saving}
+              className="rounded-lg bg-gold px-3 py-1 text-xs font-semibold text-base disabled:opacity-50"
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            <button
+              onClick={() => {
+                setEditing(false);
+                setValue(String(account.balance));
+                setRowError(null);
+              }}
+              className="text-xs text-muted"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <span className="font-medium text-ink">{formatCurrency(account.balance)}</span>
+            <button onClick={() => setEditing(true)} className="text-xs text-gold hover:underline">
+              Edit
+            </button>
+          </div>
+        )}
+      </div>
+      {rowError && <p className="mt-1 text-xs text-negative">{rowError}</p>}
+    </div>
+  );
+}
+
+
 export default function AnalyticsPage() {
   const [month, setMonth] = useState(currentMonthIso());
   const [activeTab, setActiveTab] = useState<AnalyticsTabId>('executive');
@@ -244,6 +323,14 @@ export default function AnalyticsPage() {
   const [breakdown, setBreakdown] = useState<NetWorthBreakdown | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  function loadNetWorth() {
+    getNetWorthBreakdown()
+      .then((result) => setBreakdown(result))
+      .catch(() => {
+        // Silently fail - breakdown is optional
+      });
+  }
 
   useEffect(() => {
     let ignore = false;
@@ -266,13 +353,7 @@ export default function AnalyticsPage() {
       });
 
     // Also fetch net worth breakdown
-    getNetWorthBreakdown()
-      .then((result) => {
-        if (!ignore) setBreakdown(result);
-      })
-      .catch(() => {
-        // Silently fail - breakdown is optional
-      });
+   loadNetWorth();
 
     return () => {
       ignore = true;
@@ -511,10 +592,7 @@ export default function AnalyticsPage() {
         {breakdown.accounts.length > 0 ? (
           <div className="mt-3 grid gap-3">
             {breakdown.accounts.map((account) => (
-              <div key={account.id} className="rounded-2xl bg-surface-2 p-4 flex items-center justify-between">
-                <span className="text-sm text-ink">{account.name}</span>
-                <span className="font-medium text-ink">{formatCurrency(account.balance)}</span>
-              </div>
+              <AccountBalanceRow key={account.id} account={account} onSaved={loadNetWorth} />
             ))}
           </div>
         ) : (

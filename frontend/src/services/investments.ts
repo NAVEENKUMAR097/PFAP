@@ -48,3 +48,9 @@ export function deleteInvestment(id: number): Promise<void> {
     method: 'DELETE',
   });
 }
+
+export function deleteInvestmentHolding(holdingId: number): Promise<void> {
+  return apiRequest<void>(`/investment-holdings/${holdingId}`, {
+    method: 'DELETE',
+  });
+}

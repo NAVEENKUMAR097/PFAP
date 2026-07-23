@@ -50,6 +50,31 @@ def get_account_balance(db: Session, account: models.Account) -> Decimal:
     for txn_type, total in rows:
         balance += _ACCOUNT_BALANCE_SIGNS.get(txn_type, 0) * (total or Decimal("0.00"))
     return round(balance, 2)
+def delete_investment_holding(db: Session, holding_id: int) -> bool:
+    """
+    Removes a holding and every transaction/detail row behind it — a full
+    'delete this investment' action, not just hiding the card. Once these
+    transactions are gone, this money also disappears from monthly
+    Analytics automatically, since analytics reads straight from
+    `transactions` and doesn't know about holdings separately.
+    """
+    holding = db.query(models.InvestmentHolding).filter(models.InvestmentHolding.id == holding_id).first()
+    if holding is None:
+        return False
+
+    details = db.query(models.InvestmentDetail).filter(models.InvestmentDetail.holding_id == holding_id).all()
+    transaction_ids = [d.transaction_id for d in details]
+
+    for detail in details:
+        db.delete(detail)
+    if transaction_ids:
+        db.query(models.Transaction).filter(models.Transaction.id.in_(transaction_ids)).delete(synchronize_session=False)
+
+    db.delete(holding)
+    db.commit()
+    return True
+
+
 
 def list_investment_holdings(db: Session) -> list[models.InvestmentHolding]:
     return (

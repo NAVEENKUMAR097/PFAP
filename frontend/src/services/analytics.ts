@@ -9,3 +9,12 @@ export function getAnalyticsSummary(month?: string): Promise<AnalyticsSummary> {
 export function getNetWorthBreakdown(): Promise<NetWorthBreakdown> {
   return apiRequest<NetWorthBreakdown>('/analytics/net-worth-breakdown');
 }
+export function setAccountBalance(accountId: number, currentBalance: number) {
+  return apiRequest<{ id: number; name: string; opening_balance: number }>(
+    `/accounts/${accountId}/balance`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ current_balance: currentBalance }),
+    }
+  );
+}
