@@ -104,9 +104,6 @@ def get_investments(
 #     return crud.list_investment_holdings(db)
 
 
-@router.get("/investments/holdings/{holding_id}/transactions", response_model=list[schemas.InvestmentLogEntryOut])
-def get_holding_transactions(holding_id: int, db: Session = Depends(get_db)):
-    return crud.list_holding_transactions(db, holding_id)
 
 
 

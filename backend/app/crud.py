@@ -1358,41 +1358,53 @@ def update_investment(
     transaction: models.Transaction,
     payload: schemas.InvestmentCreate,
 ) -> models.Transaction:
-
     broker = None
     if payload.broker_name:
         broker = get_or_create_broker(db, payload.broker_name)
+
+    detail = transaction.investment_detail
+    old_holding = detail.holding
+
+    # Reverse this transaction's effect on its old holding first — covers
+    # both "amount changed" and "moved to a different type/broker/account"
+    # in one step, since both cases need the old holding corrected.
+    if old_holding is not None:
+        old_holding.total_invested -= transaction.amount
+        old_holding.transaction_count -= 1
+        old_holding.updated_at = datetime.utcnow()
 
     transaction.date = payload.date
     transaction.amount = payload.amount
     transaction.account_id = payload.account_id
     transaction.notes = payload.notes
 
-    detail = transaction.investment_detail
-
     detail.investment_type_id = payload.investment_type_id
     detail.tags = payload.tags
     detail.broker_id = broker.id if broker else None
 
+    # Re-attach to (possibly new) holding and re-apply the new amount
+    new_holding = _get_or_create_investment_holding(
+        db, payload.investment_type_id, broker.id if broker else None, payload.account_id
+    )
+    detail.holding_id = new_holding.id
+    _update_investment_holding(db, new_holding, payload.amount, payload.date)
+
     db.commit()
     db.refresh(transaction)
-
     return transaction
 
 
-# ---------------------------------------------------------------------------
-# Delete Investment
-# ---------------------------------------------------------------------------
+def delete_investment(db: Session, transaction: models.Transaction) -> None:
+    detail = transaction.investment_detail
+    holding = detail.holding if detail else None
 
-def delete_investment(
-    db: Session,
-    transaction: models.Transaction,
-) -> None:
+    if holding is not None:
+        holding.total_invested -= transaction.amount
+        holding.transaction_count -= 1
+        holding.updated_at = datetime.utcnow()
 
     db.delete(transaction)
-
     db.commit()
-
 
 # ---------------------------------------------------------------------------
 # Lending — status computation (never stored, always derived)
