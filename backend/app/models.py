@@ -60,6 +60,8 @@ class Account(Base):
     name = Column(String(100), nullable=False, unique=True)
     is_active = Column(Boolean, default=True, nullable=False)
 
+    opening_balance = Column(Numeric(12, 2), nullable=False, default=0)   # <-- new
+
     transactions = relationship("Transaction", back_populates="account")
 
 

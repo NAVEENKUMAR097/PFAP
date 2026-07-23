@@ -23,6 +23,202 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+_ACCOUNT_BALANCE_SIGNS: dict[models.TransactionType, int] = {
+    models.TransactionType.expense: -1,
+    models.TransactionType.income: 1,
+    models.TransactionType.refund: 1,
+    models.TransactionType.investment: -1,
+    models.TransactionType.transfer: 0,  # not yet implemented; reserved
+    models.TransactionType.lending_disbursement: -1,
+    models.TransactionType.lending_repayment: 1,
+    models.TransactionType.borrowing_receipt: 1,
+    models.TransactionType.borrowing_repayment: -1,
+}
+
+
+def get_account_balance(db: Session, account: models.Account) -> Decimal:
+    """Opening balance + every transaction against this account, signed
+    by type. Investments/lending reduce this — that's what makes it
+    different from Net Worth."""
+    balance = account.opening_balance
+    rows = (
+        db.query(models.Transaction.transaction_type, func.sum(models.Transaction.amount))
+        .filter(models.Transaction.account_id == account.id)
+        .group_by(models.Transaction.transaction_type)
+        .all()
+    )
+    for txn_type, total in rows:
+        balance += _ACCOUNT_BALANCE_SIGNS.get(txn_type, 0) * (total or Decimal("0.00"))
+    return round(balance, 2)
+
+def list_investment_holdings(db: Session) -> list[models.InvestmentHolding]:
+    return (
+        db.query(models.InvestmentHolding)
+        .order_by(models.InvestmentHolding.total_invested.desc())
+        .all()
+    )
+
+
+def list_holding_transactions(db: Session, holding_id: int) -> list[schemas.InvestmentLogEntryOut]:
+    rows = (
+        db.query(models.InvestmentDetail)
+        .join(models.Transaction, models.InvestmentDetail.transaction_id == models.Transaction.id)
+        .filter(models.InvestmentDetail.holding_id == holding_id)
+        .order_by(models.Transaction.date.desc())
+        .all()
+    )
+    return [
+        schemas.InvestmentLogEntryOut(
+            id=row.transaction.id,
+            date=row.transaction.date,
+            amount=row.transaction.amount,
+            notes=row.transaction.notes,
+            tags=row.tags,
+        )
+        for row in rows
+    ]
+
+
+def set_account_current_balance(
+    db: Session, account: models.Account, current_balance: Decimal
+) -> models.Account:
+    """The intended way to set/correct a balance: tell it what the account
+    actually holds right now, and this back-solves opening_balance so
+    get_account_balance() returns exactly that — without you needing to
+    manually account for every transaction already recorded."""
+    balance_without_opening = get_account_balance(db, account) - account.opening_balance
+    account.opening_balance = round(current_balance - balance_without_opening, 2)
+    db.commit()
+    db.refresh(account)
+    return account
+
+
+def list_account_balances(db: Session) -> list[schemas.AccountBalanceOut]:
+    accounts = (
+        db.query(models.Account)
+        .filter(models.Account.is_active.is_(True))
+        .order_by(models.Account.name)
+        .all()
+    )
+    return [
+        schemas.AccountBalanceOut(id=a.id, name=a.name, balance=get_account_balance(db, a))
+        for a in accounts
+    ]
+
+
+def get_net_worth_summary(db: Session) -> schemas.NetWorthSummary:
+    account_balances = list_account_balances(db)
+    total_accounts = round(sum((a.balance for a in account_balances), Decimal("0.00")), 2)
+
+    total_investments = round(
+        sum(
+            (
+                (h.current_value if h.current_value is not None else h.total_invested)
+                for h in db.query(models.InvestmentHolding).all()
+            ),
+            Decimal("0.00"),
+        ),
+        2,
+    )
+
+def get_net_worth_breakdown(db: Session) -> schemas.NetWorthBreakdown:
+    today = date_type.today()
+
+    account_balances = list_account_balances(db)
+
+    holdings = db.query(models.InvestmentHolding).all()
+    investment_holdings = [
+        schemas.InvestmentHoldingBreakdown(
+            id=h.id,
+            investment_type=h.investment_type.name,
+            broker=h.broker.name if h.broker else None,
+            account=h.account.name,
+            total_invested=h.total_invested,
+            current_value=h.current_value,
+            transaction_count=h.transaction_count,
+        )
+        for h in holdings
+    ]
+    total_investments = round(
+        sum(
+            ((h.current_value if h.current_value is not None else h.total_invested) for h in holdings),
+            Decimal("0.00"),
+        ),
+        2,
+    )
+
+    lending_agreements = []
+    total_lending_outstanding = Decimal("0.00")
+    for agreement in list_lendings(db):
+        info = compute_lending_status(agreement, today)
+        lending_agreements.append(
+            schemas.LendingAgreementBreakdown(
+                id=agreement.id,
+                person=agreement.person.name,
+                principal=agreement.transaction.amount,
+                repaid=info["total_repaid"],
+                remaining=info["remaining"],
+                status=info["status"],
+                due_date=agreement.due_date,
+            )
+        )
+        total_lending_outstanding += info["remaining"]
+
+    borrowing_agreements = []
+    total_borrowing_outstanding = Decimal("0.00")
+    for agreement in list_borrowings(db):
+        info = compute_borrowing_status(agreement, today)
+        borrowing_agreements.append(
+            schemas.BorrowingAgreementBreakdown(
+                id=agreement.id,
+                person=agreement.person.name,
+                principal=agreement.transaction.amount,
+                repaid=info["total_repaid"],
+                remaining=info["remaining"],
+                status=info["status"],
+                due_date=agreement.due_date,
+            )
+        )
+        total_borrowing_outstanding += info["remaining"]
+
+    total_accounts = round(sum((a.balance for a in account_balances), Decimal("0.00")), 2)
+    net_worth = round(
+        total_accounts + total_investments + total_lending_outstanding - total_borrowing_outstanding, 2
+    )
+
+    return schemas.NetWorthBreakdown(
+        accounts=account_balances,
+        investment_holdings=investment_holdings,
+        lending_agreements=lending_agreements,
+        borrowing_agreements=borrowing_agreements,
+        total_accounts_balance=total_accounts,
+        total_investments_value=total_investments,
+        total_lending_outstanding=round(total_lending_outstanding, 2),
+        total_borrowing_outstanding=round(total_borrowing_outstanding, 2),
+        net_worth=net_worth,
+    )
+
+
+    lending_summary = _build_loan_summary(list_lendings(db), compute_lending_status)
+    borrowing_summary = _build_loan_summary(list_borrowings(db), compute_borrowing_status)
+
+    net_worth = round(
+        total_accounts + total_investments + lending_summary.outstanding - borrowing_summary.outstanding,
+        2,
+    )
+
+    return schemas.NetWorthSummary(
+        accounts=account_balances,
+        total_accounts_balance=total_accounts,
+        total_investments_value=total_investments,
+        total_lending_outstanding=lending_summary.outstanding,
+        total_borrowing_outstanding=borrowing_summary.outstanding,
+        net_worth=net_worth,
+    )
+
+
+
+
 def get_or_create_merchant(db: Session, name: str) -> models.Merchant:
     """
     Merchants are free-text from the user's perspective but deduplicated
@@ -106,25 +302,20 @@ def get_master_data_item(db: Session, model, item_id: int):
     return db.query(model).filter(model.id == item_id).first()
 
 
-def create_master_data_item(db: Session, model, name: str):
+def create_master_data_item(db: Session, model, name: str, **extra_fields):
     name = name.strip()
     label = _MASTER_DATA_LABELS.get(model, model.__name__)
 
-    existing = (
-        db.query(model)
-        .filter(func.lower(model.name) == name.lower())
-        .first()
-    )
+    existing = db.query(model).filter(func.lower(model.name) == name.lower()).first()
     if existing:
         raise HTTPException(status_code=409, detail=f"{label} '{name}' already exists.")
 
-    item = model(name=name)
+    clean_extra = {k: v for k, v in extra_fields.items() if v is not None}
+    item = model(name=name, **clean_extra)
     db.add(item)
     try:
         db.commit()
     except IntegrityError:
-        # Race condition: two requests passed the check above at the same
-        # time. The unique constraint on `name` catches it here instead.
         db.rollback()
         raise HTTPException(status_code=409, detail=f"{label} '{name}' already exists.")
     db.refresh(item)

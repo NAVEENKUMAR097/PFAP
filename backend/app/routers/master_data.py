@@ -28,6 +28,15 @@ def update_category(item_id: int, payload: schemas.MasterDataCreatePayload, db: 
         raise HTTPException(status_code=404, detail="Category not found")
     return crud.update_master_data_item(db, item, name=payload.name)
 
+@router.put("/accounts/{item_id}/balance", response_model=schemas.AccountOut)
+def set_account_balance(
+    item_id: int, payload: schemas.AccountBalanceAdjustment, db: Session = Depends(get_db)
+):
+    item = crud.get_master_data_item(db, models.Account, item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+    return crud.set_account_current_balance(db, item, payload.current_balance)
+
 
 @router.delete("/categories/{item_id}", status_code=204)
 def deactivate_category(item_id: int, db: Session = Depends(get_db)):
@@ -90,7 +99,9 @@ def get_accounts(db: Session = Depends(get_db)):
 
 @router.post("/accounts", response_model=schemas.AccountOut, status_code=201)
 def create_account(payload: schemas.MasterDataCreatePayload, db: Session = Depends(get_db)):
-    return crud.create_master_data_item(db, models.Account, payload.name)
+    return crud.create_master_data_item(
+        db, models.Account, payload.name, opening_balance=payload.opening_balance
+    )
 
 
 @router.put("/accounts/{item_id}", response_model=schemas.AccountOut)

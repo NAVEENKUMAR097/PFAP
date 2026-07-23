@@ -13,6 +13,9 @@ router = APIRouter(prefix="/investments", tags=["investments"])
 # Mapper
 # ---------------------------------------------------------------------------
 
+
+
+
 def _to_investment_out(transaction) -> schemas.InvestmentOut:
     detail = transaction.investment_detail
 
@@ -95,6 +98,17 @@ def get_investments(
 # ---------------------------------------------------------------------------
 # Read One
 # ---------------------------------------------------------------------------
+
+# @router.get("/investments/holdings", response_model=list[schemas.InvestmentHoldingOut])
+# def get_investment_holdings(db: Session = Depends(get_db)):
+#     return crud.list_investment_holdings(db)
+
+
+@router.get("/investments/holdings/{holding_id}/transactions", response_model=list[schemas.InvestmentLogEntryOut])
+def get_holding_transactions(holding_id: int, db: Session = Depends(get_db)):
+    return crud.list_holding_transactions(db, holding_id)
+
+
 
 @router.get("/{investment_id}", response_model=schemas.InvestmentOut)
 def get_investment(

@@ -13,7 +13,7 @@ import {
 } from 'recharts';
 import PageScaffold from '../../components/common/Pagescaffold';
 import { ApiError } from '../../services/api';
-import { getAnalyticsSummary } from '../../services/analytics';
+import { getAnalyticsSummary, getNetWorthBreakdown } from '../../services/analytics';
 import { UNREACHABLE_MESSAGE } from '../../config';
 import type {
   AnalyticsBreakdownItem,
@@ -25,6 +25,7 @@ import type {
   AnalyticsCategorySpend,
   AnalyticsLoanSummary,
   AnalyticsSummary,
+  NetWorthBreakdown,
 } from '../../services/types';
 import { formatCurrency } from '../../utils/currency';
 
@@ -37,6 +38,7 @@ const TAB_ITEMS = [
   { id: 'budget', label: 'Budget' },
   { id: 'loans', label: 'Loans' },
   { id: 'health', label: 'Health' },
+  { id: 'networth', label: 'Net Worth' },
 ] as const;
 
 type AnalyticsTabId = (typeof TAB_ITEMS)[number]['id'];
@@ -239,6 +241,7 @@ export default function AnalyticsPage() {
   const [month, setMonth] = useState(currentMonthIso());
   const [activeTab, setActiveTab] = useState<AnalyticsTabId>('executive');
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
+  const [breakdown, setBreakdown] = useState<NetWorthBreakdown | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -260,6 +263,15 @@ export default function AnalyticsPage() {
       })
       .finally(() => {
         if (!ignore) setLoading(false);
+      });
+
+    // Also fetch net worth breakdown
+    getNetWorthBreakdown()
+      .then((result) => {
+        if (!ignore) setBreakdown(result);
+      })
+      .catch(() => {
+        // Silently fail - breakdown is optional
       });
 
     return () => {
@@ -465,6 +477,119 @@ export default function AnalyticsPage() {
     );
   }
 
+  function renderNetWorth() {
+    if (!breakdown) return null;
+
+    return (
+      <>
+        <SectionTitle>Net Worth Overview</SectionTitle>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-2xl bg-surface p-4">
+            <p className="text-xs text-muted">In Accounts</p>
+            <p className="mt-1 font-display text-xl font-medium text-ink">{formatCurrency(breakdown.total_accounts_balance)}</p>
+          </div>
+          <div className="rounded-2xl bg-surface p-4">
+            <p className="text-xs text-muted">In Investments</p>
+            <p className="mt-1 font-display text-xl font-medium text-ink">{formatCurrency(breakdown.total_investments_value)}</p>
+          </div>
+          <div className="rounded-2xl bg-surface p-4">
+            <p className="text-xs text-muted">Lent Out</p>
+            <p className="mt-1 font-display text-xl font-medium text-positive">{formatCurrency(breakdown.total_lending_outstanding)}</p>
+          </div>
+          <div className="rounded-2xl bg-surface p-4">
+            <p className="text-xs text-muted">Borrowed</p>
+            <p className="mt-1 font-display text-xl font-medium text-negative">{formatCurrency(breakdown.total_borrowing_outstanding)}</p>
+          </div>
+        </div>
+
+        <div className="mt-6 rounded-2xl bg-surface border border-white/10 p-6 text-center">
+          <p className="text-sm text-muted">Net Worth</p>
+          <p className="mt-1 font-display text-3xl font-medium text-gold">{formatCurrency(breakdown.net_worth)}</p>
+        </div>
+
+        <SectionTitle>Bank Accounts</SectionTitle>
+        {breakdown.accounts.length > 0 ? (
+          <div className="mt-3 grid gap-3">
+            {breakdown.accounts.map((account) => (
+              <div key={account.id} className="rounded-2xl bg-surface-2 p-4 flex items-center justify-between">
+                <span className="text-sm text-ink">{account.name}</span>
+                <span className="font-medium text-ink">{formatCurrency(account.balance)}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyPanel>No active accounts.</EmptyPanel>
+        )}
+
+        <SectionTitle>Investment Holdings</SectionTitle>
+        {breakdown.investment_holdings.length > 0 ? (
+          <div className="mt-3 grid gap-3">
+            {breakdown.investment_holdings.map((holding) => (
+              <div key={holding.id} className="rounded-2xl bg-surface-2 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-ink">{holding.investment_type}</p>
+                    <p className="text-xs text-muted">{holding.broker ? `${holding.broker} · ` : ''}{holding.account}</p>
+                  </div>
+                    <div className="text-right">
+                      <p className="font-medium text-ink">{formatCurrency(holding.current_value ?? holding.total_invested)}</p>
+                      <p className="text-xs text-muted">Invested: {formatCurrency(holding.total_invested)} · {holding.transaction_count} contribution(s)</p>
+                    </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyPanel>No investment holdings yet.</EmptyPanel>
+        )}
+
+        <SectionTitle>Lending Agreements</SectionTitle>
+        {breakdown.lending_agreements.length > 0 ? (
+          <div className="mt-3 grid gap-3">
+            {breakdown.lending_agreements.map((agreement) => (
+              <div key={agreement.id} className="rounded-2xl bg-surface-2 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-ink">{agreement.person}</p>
+                    <p className="text-xs text-muted">Status: {agreement.status} · Due: {agreement.due_date || 'No due date'}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-medium text-positive">{formatCurrency(agreement.remaining)}</p>
+                    <p className="text-xs text-muted">Principal: {formatCurrency(agreement.principal)} · Repaid: {formatCurrency(agreement.repaid)}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyPanel>No lending agreements.</EmptyPanel>
+        )}
+
+        <SectionTitle>Borrowing Agreements</SectionTitle>
+        {breakdown.borrowing_agreements.length > 0 ? (
+          <div className="mt-3 grid gap-3">
+            {breakdown.borrowing_agreements.map((agreement) => (
+              <div key={agreement.id} className="rounded-2xl bg-surface-2 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-ink">{agreement.person}</p>
+                    <p className="text-xs text-muted">Status: {agreement.status} · Due: {agreement.due_date || 'No due date'}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-medium text-negative">{formatCurrency(agreement.remaining)}</p>
+                    <p className="text-xs text-muted">Principal: {formatCurrency(agreement.principal)} · Repaid: {formatCurrency(agreement.repaid)}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyPanel>No borrowing agreements.</EmptyPanel>
+        )}
+      </>
+    );
+  }
+
   function renderActiveTab() {
     switch (activeTab) {
       case 'executive':
@@ -479,6 +604,8 @@ export default function AnalyticsPage() {
         return renderLoans();
       case 'health':
         return renderHealth();
+      case 'networth':
+        return renderNetWorth();
       default:
         return null;
     }

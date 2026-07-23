@@ -13,6 +13,7 @@ import SettingsPage from '../pages/Settings';
 import MorePage from '../pages/More';
 import RecurringExpensesPage from '../pages/RecurringExpenses';
 
+
 /**
  * Every route is nested under a single MainLayout element, so Header and
  * BottomNavigation render exactly once and every page reaches the screen
@@ -31,6 +32,7 @@ export default function AppRoutes() {
         <Route path="/borrowing" element={<BorrowingPage />} />
         <Route path="/budget" element={<BudgetPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
+        
         {/* <Route path="/reports" element={<ReportsPage />} /> */}
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/recurring" element={<RecurringExpensesPage />} />

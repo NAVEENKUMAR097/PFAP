@@ -9,16 +9,92 @@ need to diverge (e.g. exposing a computed field, or hiding an internal id).
 """
 from datetime import date as date_type, datetime
 from typing import Optional, Literal
-
-from pydantic import BaseModel, Field, ConfigDict, field_validator
 from decimal import Decimal
 
+from pydantic import BaseModel, Field, ConfigDict, field_validator
+
+
 class MasterDataCreatePayload(BaseModel):
-    """Used by master_data.py's create/update endpoints — both just send {"name": "..."}."""
+    """Used by master_data.py's create/update endpoints. `opening_balance`
+    only applies to Accounts — ignored for Category/PaymentMethod/etc."""
     name: str = Field(min_length=1, max_length=150)
+    opening_balance: Optional[Decimal] = None
 
 
 # ---- Master data (simple read schemas for dropdowns) ----------------------
+
+
+class InvestmentLogEntryOut(BaseModel):
+    id: int
+    date: date_type
+    amount: Decimal
+    notes: Optional[str] = None
+    tags: Optional[str] = None
+
+
+class AccountBalanceAdjustment(BaseModel):
+    """'This account actually has ₹X in it right now' — the practical way
+    to set or correct a balance, instead of hand-calculating an opening
+    balance against every transaction already recorded."""
+    current_balance: Decimal
+
+
+class AccountBalanceOut(BaseModel):
+    id: int
+    name: str
+    balance: Decimal
+
+
+class NetWorthSummary(BaseModel):
+    accounts: list[AccountBalanceOut]
+    total_accounts_balance: Decimal
+    total_investments_value: Decimal
+    total_lending_outstanding: Decimal
+    total_borrowing_outstanding: Decimal
+    net_worth: Decimal
+
+
+# NEW: Detailed Net Worth Breakdown
+class InvestmentHoldingBreakdown(BaseModel):
+    id: int
+    investment_type: str
+    broker: Optional[str]
+    account: str
+    total_invested: Decimal
+    current_value: Optional[Decimal]
+    transaction_count: int
+
+
+class LendingAgreementBreakdown(BaseModel):
+    id: int
+    person: str
+    principal: Decimal
+    repaid: Decimal
+    remaining: Decimal
+    status: Literal["active", "partially_repaid", "settled", "overdue"]
+    due_date: Optional[date_type]
+
+
+class BorrowingAgreementBreakdown(BaseModel):
+    id: int
+    person: str
+    principal: Decimal
+    repaid: Decimal
+    remaining: Decimal
+    status: Literal["active", "partially_repaid", "settled", "overdue"]
+    due_date: Optional[date_type]
+
+
+class NetWorthBreakdown(BaseModel):
+    accounts: list[AccountBalanceOut]
+    investment_holdings: list[InvestmentHoldingBreakdown]
+    lending_agreements: list[LendingAgreementBreakdown]
+    borrowing_agreements: list[BorrowingAgreementBreakdown]
+    total_accounts_balance: Decimal
+    total_investments_value: Decimal
+    total_lending_outstanding: Decimal
+    total_borrowing_outstanding: Decimal
+    net_worth: Decimal
 
 
 class CategoryOut(BaseModel):
@@ -68,6 +144,7 @@ class AccountOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     name: str
+    opening_balance: Decimal
 
 
 class MerchantOut(BaseModel):
@@ -225,6 +302,7 @@ class InvestmentHoldingOut(BaseModel):
 # Transaction Templates (for recurring references)
 # ---------------------------------------------------------------------------
 
+
 class ExpenseTemplateCreate(BaseModel):
     name: str = Field(..., max_length=150)
     amount: Decimal = Field(gt=0)
@@ -236,6 +314,7 @@ class ExpenseTemplateCreate(BaseModel):
     need_or_want: Optional[Literal["need", "want"]] = None
     notes: Optional[str] = Field(default=None, max_length=500)
     tags: Optional[str] = Field(default=None, max_length=255)
+
 
 class ExpenseTemplateOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -260,6 +339,7 @@ class IncomeTemplateCreate(BaseModel):
     account_id: int
     notes: Optional[str] = Field(default=None, max_length=500)
     tags: Optional[str] = Field(default=None, max_length=255)
+
 
 class IncomeTemplateOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -531,6 +611,7 @@ class AnalyticsSummary(BaseModel):
 # Recurring Expenses
 # ---------------------------------------------------------------------------
 
+
 class RecurringExpenseCreate(BaseModel):
     name: str
     amount: Decimal
@@ -572,6 +653,7 @@ class RecurringExpenseOut(BaseModel):
 # ---------------------------------------------------------------------------
 # Recurring Transactions (New unified system)
 # ---------------------------------------------------------------------------
+
 
 class RecurringTransactionCreate(BaseModel):
     """

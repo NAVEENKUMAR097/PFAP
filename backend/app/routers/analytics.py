@@ -13,3 +13,11 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 def get_analytics_summary(month: str | None = None, db: Session = Depends(get_db)):
     target_month = month or date.today().strftime("%Y-%m")
     return crud.get_analytics_summary(db, target_month)
+
+@router.get("/net-worth", response_model=schemas.NetWorthSummary)
+def get_net_worth(db: Session = Depends(get_db)):
+    return crud.get_net_worth_summary(db)
+
+@router.get("/net-worth-breakdown", response_model=schemas.NetWorthBreakdown)
+def get_net_worth_breakdown(db: Session = Depends(get_db)):
+    return crud.get_net_worth_breakdown(db)

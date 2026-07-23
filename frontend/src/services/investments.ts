@@ -1,5 +1,10 @@
 import { apiRequest } from './api';
-import type { InvestmentOut, InvestmentCreatePayload, InvestmentHoldingOut } from './types';
+import type {
+  InvestmentOut,
+  InvestmentCreatePayload,
+  InvestmentHoldingOut,
+  InvestmentLogEntryOut,
+} from './types';
 
 export function listInvestments(month?: string): Promise<InvestmentOut[]> {
   const query = month ? `?month=${month}` : '';
@@ -7,11 +12,17 @@ export function listInvestments(month?: string): Promise<InvestmentOut[]> {
 }
 
 // Existing holdings - used to populate the "attach this SIP to" dropdown on
-// the Recurring Transactions page. Recurring investments reference one of
-// these directly instead of a template (see backend RecurringTransaction).
-// Hits the dedicated investment_holdings router, not /investments.
+// the Recurring Transactions page, and now also to render the Investments
+// page's per-holding cards. Hits the dedicated investment_holdings router,
+// not /investments.
 export function listInvestmentHoldings(): Promise<InvestmentHoldingOut[]> {
   return apiRequest<InvestmentHoldingOut[]>('/investment-holdings');
+}
+
+// Contribution history for one holding - powers the "View log" expansion
+// on each Investments page card. Same router as listInvestmentHoldings.
+export function listHoldingTransactions(holdingId: number): Promise<InvestmentLogEntryOut[]> {
+  return apiRequest<InvestmentLogEntryOut[]>(`/investment-holdings/${holdingId}/transactions`);
 }
 
 export function getInvestment(id: number): Promise<InvestmentOut> {

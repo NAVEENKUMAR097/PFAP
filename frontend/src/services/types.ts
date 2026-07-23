@@ -467,3 +467,70 @@ export interface RecurringTransactionUpdate {
   lending_id?: number | null;
   borrowing_id?: number | null;
 }
+
+
+export interface AccountBalanceOut {
+  id: number;
+  name: string;
+  balance: number;
+}
+
+export interface NetWorthSummary {
+  accounts: AccountBalanceOut[];
+  total_accounts_balance: number;
+  total_investments_value: number;
+  total_lending_outstanding: number;
+  total_borrowing_outstanding: number;
+  net_worth: number;
+}
+
+export interface InvestmentLogEntryOut {
+  id: number;
+  date: string;
+  amount: number;
+  notes: string | null;
+  tags: string | null;
+}
+
+// NEW: Net Worth Breakdown types
+export interface InvestmentHoldingBreakdown {
+  id: number;
+  investment_type: string;
+  broker: string | null;
+  account: string;
+  total_invested: number;
+  current_value: number | null;
+  transaction_count: number;
+}
+
+export interface LendingAgreementBreakdown {
+  id: number;
+  person: string;
+  principal: number;
+  repaid: number;
+  remaining: number;
+  status: LoanStatus;
+  due_date: string | null;
+}
+
+export interface BorrowingAgreementBreakdown {
+  id: number;
+  person: string;
+  principal: number;
+  repaid: number;
+  remaining: number;
+  status: LoanStatus;
+  due_date: string | null;
+}
+
+export interface NetWorthBreakdown {
+  accounts: AccountBalanceOut[];
+  investment_holdings: InvestmentHoldingBreakdown[];
+  lending_agreements: LendingAgreementBreakdown[];
+  borrowing_agreements: BorrowingAgreementBreakdown[];
+  total_accounts_balance: number;
+  total_investments_value: number;
+  total_lending_outstanding: number;
+  total_borrowing_outstanding: number;
+  net_worth: number;
+}
