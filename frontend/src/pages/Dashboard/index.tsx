@@ -309,6 +309,41 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {/* Accounts (expense) */}
+          {summary.account_spend.length > 0 && (
+            <div className="flex flex-col gap-2 rounded-2xl bg-surface p-4">
+              <h2 className="text-xs font-medium uppercase tracking-wide text-muted">Spend by Account</h2>
+              {summary.account_spend.map((a) => (
+                <div key={a.label} className="flex items-center justify-between text-sm">
+                  <span className="text-ink">{a.label}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted">{formatCurrency(a.amount)}</span>
+                    <span className="w-10 text-right text-xs text-muted">{a.percentage}%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Investments by Account */}
+          {summary.investment_by_account.length > 0 && (
+            <div className="flex flex-col gap-2 rounded-2xl bg-surface p-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xs font-medium uppercase tracking-wide text-muted">Investments by Account</h2>
+                <span className="text-sm font-medium text-gold">{formatCurrency(investments)}</span>
+              </div>
+              {summary.investment_by_account.map((a) => (
+                <div key={a.label} className="flex items-center justify-between text-sm">
+                  <span className="text-ink">{a.label}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted">{formatCurrency(a.amount)}</span>
+                    <span className="w-10 text-right text-xs text-muted">{a.percentage}%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Insights */}
           {summary.insights.length > 0 && (
             <div className="flex flex-col gap-3 rounded-2xl bg-surface p-4">

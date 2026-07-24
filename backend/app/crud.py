@@ -801,6 +801,35 @@ def get_analytics_summary(db: Session, month: str) -> schemas.AnalyticsSummary:
         for row in category_rows
     ]
 
+    account_spend_rows = (
+        db.query(
+            models.Account.id,
+            models.Account.name,
+            func.sum(models.Transaction.amount),
+            func.count(models.Transaction.id),
+        )
+        .join(models.Transaction, models.Transaction.account_id == models.Account.id)
+        .filter(
+            models.Transaction.transaction_type == models.TransactionType.expense,
+            models.Transaction.date.between(start, end),
+        )
+        .group_by(models.Account.id, models.Account.name)
+        .order_by(func.sum(models.Transaction.amount).desc())
+        .all()
+    )
+    account_spend = [
+        schemas.AnalyticsBreakdownItem(
+            label=row[1],
+            amount=round((row[2] or 0), 2),
+            count=int(row[3] or 0),
+            percentage=round(((row[2] or 0) / category_total) * 100, 1)
+            if category_total > 0
+            else 0.0,
+        )
+        for row in account_spend_rows
+    ]
+
+
     top_merchant_rows = (
         db.query(
             models.Merchant.id,
@@ -945,6 +974,36 @@ def get_analytics_summary(db: Session, month: str) -> schemas.AnalyticsSummary:
         for row in investment_alloc_rows
     ]
 
+
+    investment_by_account_rows = (
+        db.query(
+            models.Account.id,
+            models.Account.name,
+            func.sum(models.Transaction.amount),
+            func.count(models.Transaction.id),
+        )
+        .join(models.Transaction, models.Transaction.account_id == models.Account.id)
+        .filter(
+            models.Transaction.transaction_type == models.TransactionType.investment,
+            models.Transaction.date.between(start, end),
+        )
+        .group_by(models.Account.id, models.Account.name)
+        .order_by(func.sum(models.Transaction.amount).desc())
+        .all()
+    )
+    investment_by_account = [
+        schemas.AnalyticsBreakdownItem(
+            label=row[1],
+            amount=round((row[2] or 0), 2),
+            count=int(row[3] or 0),
+            percentage=round(((row[2] or 0) / monthly_investment) * 100, 1)
+            if monthly_investment > 0
+            else 0.0,
+        )
+        for row in investment_by_account_rows
+    ]
+
+
     # Investment holdings - current portfolio state
     holdings_rows = (
         db.query(
@@ -1088,11 +1147,13 @@ def get_analytics_summary(db: Session, month: str) -> schemas.AnalyticsSummary:
         spending_kpis=spending_kpis,
         monthly_trend=trend,
         category_spend=category_spend,
+        account_spend=account_spend, 
         top_merchants=top_merchants,
         need_want=need_want,
         payment_methods=payment_methods,
         income_sources=income_sources,
         investment_allocation=investment_allocation,
+        investment_by_account=investment_by_account,
         investment_holdings=investment_holdings,
         budget_signals=budget_signals,
         lending_summary=lending_summary,

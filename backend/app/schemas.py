@@ -593,11 +593,13 @@ class AnalyticsSummary(BaseModel):
     spending_kpis: list[AnalyticsKpi]
     monthly_trend: list[AnalyticsMonthlyPoint]
     category_spend: list[AnalyticsCategorySpend]
+    account_spend: list[AnalyticsBreakdownItem]          # <-- new
     top_merchants: list[AnalyticsBreakdownItem]
     need_want: list[AnalyticsBreakdownItem]
     payment_methods: list[AnalyticsBreakdownItem]
     income_sources: list[AnalyticsBreakdownItem]
     investment_allocation: list[AnalyticsBreakdownItem]
+    investment_by_account: list[AnalyticsBreakdownItem]  # <-- new
     investment_holdings: list[AnalyticsBreakdownItem]
     budget_signals: list[AnalyticsBudgetSignal]
     lending_summary: AnalyticsLoanSummary

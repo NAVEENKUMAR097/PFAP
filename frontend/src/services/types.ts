@@ -294,6 +294,8 @@ export interface AnalyticsSummary {
   executive_summary: AnalyticsKpi[];
   spending_kpis: AnalyticsKpi[];
   monthly_trend: AnalyticsMonthlyPoint[];
+  account_spend: AnalyticsBreakdownItem[];
+  investment_by_account: AnalyticsBreakdownItem[];
   category_spend: AnalyticsCategorySpend[];
   top_merchants: AnalyticsBreakdownItem[];
   need_want: AnalyticsBreakdownItem[];
