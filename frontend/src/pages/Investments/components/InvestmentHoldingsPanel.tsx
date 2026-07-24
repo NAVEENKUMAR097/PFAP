@@ -1,20 +1,16 @@
-import { useEffect, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import {
   listInvestmentHoldings,
   listHoldingTransactions,
   createInvestment,
+  deleteInvestment,
+  deleteInvestmentHolding,
 } from '../../../services/investments';
 import type { InvestmentHoldingOut, InvestmentLogEntryOut } from '../../../services/types';
 
-import {
-  
-  deleteInvestment,
-} from '../../../services/investments';
-
-import {
-  
-  deleteInvestmentHolding,
-} from '../../../services/investments';
+export interface InvestmentHoldingsPanelHandle {
+  reload: () => void;
+}
 
 function formatMoney(n: number) {
   return `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -104,7 +100,8 @@ function HoldingCard({
   holding: InvestmentHoldingOut;
   onContributionAdded: () => void;
   onHoldingDeleted: () => void;
-}) {  const [expanded, setExpanded] = useState(false);
+}) {
+  const [expanded, setExpanded] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [log, setLog] = useState<InvestmentLogEntryOut[] | null>(null);
   const [loadingLog, setLoadingLog] = useState(false);
@@ -144,7 +141,12 @@ function HoldingCard({
         </button>
         <button
           onClick={async () => {
-            if (!confirm(`Delete "${holding.investment_type.name}" and all ${holding.transaction_count} contribution(s)? This cannot be undone.`)) return;
+            if (
+              !confirm(
+                `Delete "${holding.investment_type.name}" and all ${holding.transaction_count} contribution(s)? This cannot be undone.`
+              )
+            )
+              return;
             await deleteInvestmentHolding(holding.id);
             onHoldingDeleted();
           }}
@@ -196,7 +198,7 @@ function HoldingCard({
   );
 }
 
-export default function InvestmentHoldingsPanel() {
+const InvestmentHoldingsPanel = forwardRef<InvestmentHoldingsPanelHandle>((_props, ref) => {
   const [holdings, setHoldings] = useState<InvestmentHoldingOut[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -208,6 +210,8 @@ export default function InvestmentHoldingsPanel() {
       .catch(() => setError('Could not load investment holdings.'))
       .finally(() => setLoading(false));
   };
+
+  useImperativeHandle(ref, () => ({ reload: load }));
 
   useEffect(() => {
     load();
@@ -233,4 +237,6 @@ export default function InvestmentHoldingsPanel() {
       )}
     </div>
   );
-}
+});
+
+export default InvestmentHoldingsPanel;
